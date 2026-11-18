@@ -1,5 +1,5 @@
-import json
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -11,11 +11,13 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from avl import AVLTree
+from graph_render import cleanup_temp_files, render_to_pixmap, render_tree
 from persistence import DEFAULT_DATA_PATH, save_tree
 
 
@@ -35,11 +37,13 @@ class MainWindow(QMainWindow):
 
     def __init__(self, tree: AVLTree | None = None, data_path: str = DEFAULT_DATA_PATH):
         super().__init__()
+        cleanup_temp_files()
         self.tree = tree if tree is not None else AVLTree()
         self.data_path = data_path
+        self.current_svg_path: str | None = None
 
         self.setWindowTitle("PAA - Programa de Aprendizaje de Árboles AVL")
-        self.resize(1100, 680)
+        self.resize(1120, 700)
 
         self._build_ui()
         self.refresh_ui()
@@ -128,13 +132,14 @@ class MainWindow(QMainWindow):
         left_layout.addStretch()
 
         # Panel derecho (60%)
-        right_group = QGroupBox("Visualización del Árbol AVL")
+        right_group = QGroupBox("Visualización del Árbol AVL (Graphviz)")
         right_layout = QVBoxLayout(right_group)
 
         self.canvas_label = QLabel("Árbol vacío")
         self.canvas_label.setObjectName("canvasLabel")
         self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.canvas_label.setWordWrap(True)
+        self.canvas_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.canvas_label.setMinimumSize(420, 420)
         right_layout.addWidget(self.canvas_label)
 
         main_layout.addWidget(left_panel, 4)
@@ -188,11 +193,14 @@ class MainWindow(QMainWindow):
             return
         found = self.tree.search(val)
         if found:
-            self.statusBar().showMessage(f"Valor {val} encontrado (activo).")
-            QMessageBox.information(self, "Búsqueda", f"El valor {val} SÍ se encuentra activo en el árbol.")
+            self.refresh_ui(
+                status_msg=f"Valor {val} encontrado y resaltado.",
+                highlight_value=val,
+                highlight_color="search",
+            )
         else:
-            self.statusBar().showMessage(f"Valor {val} no encontrado.")
-            QMessageBox.information(self, "Búsqueda", f"Valor {val} no encontrado en el árbol activo.")
+            self.refresh_ui(status_msg=f"Valor {val} no encontrado.")
+            QMessageBox.information(self, "Búsqueda", "Valor no encontrado")
 
     def on_deactivate(self):
         val = self._read_int_input()
@@ -231,7 +239,30 @@ class MainWindow(QMainWindow):
             self.tree.clear()
             self._persist_and_refresh("Árbol vaciado.")
 
-    def refresh_ui(self, status_msg: str = ""):
+    def _update_canvas_pixmap(self):
+        if not self.current_svg_path or self.tree.is_empty():
+            self.canvas_label.setPixmap(QPixmap())
+            self.canvas_label.setText("Árbol vacío")
+            return
+        pixmap = render_to_pixmap(
+            self.current_svg_path,
+            self.canvas_label.width(),
+            self.canvas_label.height(),
+        )
+        self.canvas_label.setText("")
+        self.canvas_label.setPixmap(pixmap)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self.current_svg_path and not self.tree.is_empty():
+            self._update_canvas_pixmap()
+
+    def refresh_ui(
+        self,
+        status_msg: str = "",
+        highlight_value: int | None = None,
+        highlight_color: str = "search",
+    ):
         pre_str = ", ".join(map(str, self.tree.preorder())) or "(vacío)"
         in_str = ", ".join(map(str, self.tree.inorder())) or "(vacío)"
         post_str = ", ".join(map(str, self.tree.postorder())) or "(vacío)"
@@ -250,10 +281,15 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage(counts_text)
 
+        self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if self.tree.is_empty():
+            self.current_svg_path = None
+            self.canvas_label.setPixmap(QPixmap())
             self.canvas_label.setText("Árbol vacío")
-            self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         else:
-            formatted = json.dumps(structure, indent=2)
-            self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-            self.canvas_label.setText(formatted)
+            self.current_svg_path = render_tree(
+                self.tree,
+                highlight_value=highlight_value,
+                highlight_color=highlight_color,
+            )
+            self._update_canvas_pixmap()
