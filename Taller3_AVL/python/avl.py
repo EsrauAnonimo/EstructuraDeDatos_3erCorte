@@ -211,6 +211,24 @@ class AVLTree:
             "right": self._serialize(node.right),
         }
 
+    @classmethod
+    def from_structure(cls, structure):
+        # Reconstruye un AVLTree respetando exactamente la estructura, alturas y estados
+        tree = cls()
+        tree.root = cls._deserialize(structure)
+        return tree
+
+    @classmethod
+    def _deserialize(cls, data):
+        if not data:
+            return None
+        node = Node(data["value"])
+        node.active = data["active"]
+        node.height = data["height"]
+        node.left = cls._deserialize(data["left"])
+        node.right = cls._deserialize(data["right"])
+        return node
+
 
 if __name__ == "__main__":
     tree = AVLTree()
