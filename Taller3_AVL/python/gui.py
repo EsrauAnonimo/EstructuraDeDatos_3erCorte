@@ -1,6 +1,7 @@
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
+    QComboBox,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -42,8 +43,15 @@ class MainWindow(QMainWindow):
         self.data_path = data_path
         self.current_svg_path: str | None = None
 
+        # Estado de la animación de recorridos
+        self.anim_timer = QTimer(self)
+        self.anim_timer.setInterval(600)
+        self.anim_timer.timeout.connect(self._on_animation_step)
+        self.anim_sequence: list[int] = []
+        self.anim_index: int = 0
+
         self.setWindowTitle("PAA - Programa de Aprendizaje de Árboles AVL")
-        self.resize(1120, 700)
+        self.resize(1140, 720)
 
         self._build_ui()
         self.refresh_ui()
@@ -114,7 +122,7 @@ class MainWindow(QMainWindow):
         separator.setStyleSheet("color: #CBD5E1;")
         left_layout.addWidget(separator)
 
-        # Grupo de recorridos siempre visibles
+        # Grupo de recorridos siempre visibles + animación
         traversals_group = QGroupBox("Recorridos (Nodos Activos)")
         traversals_layout = QVBoxLayout(traversals_group)
         traversals_layout.setSpacing(8)
@@ -122,6 +130,24 @@ class MainWindow(QMainWindow):
         self.lbl_preorder = self._create_traversal_row(traversals_layout, "Pre-orden:")
         self.lbl_inorder = self._create_traversal_row(traversals_layout, "In-orden:")
         self.lbl_postorder = self._create_traversal_row(traversals_layout, "Post-orden:")
+
+        play_row = QHBoxLayout()
+        play_row.setSpacing(8)
+
+        self.combo_traversal = QComboBox()
+        self.combo_traversal.addItems(["Pre-orden", "In-orden", "Post-orden"])
+
+        self.btn_play = QPushButton("▶ Reproducir recorrido")
+        self.btn_play.setObjectName("btnSuccess")
+        self.btn_play.clicked.connect(self.on_play_traversal)
+
+        play_row.addWidget(self.combo_traversal, 1)
+        play_row.addWidget(self.btn_play, 1)
+        traversals_layout.addLayout(play_row)
+
+        self.lbl_current_step = QLabel("Paso actual: -")
+        self.lbl_current_step.setStyleSheet("font-weight: 600; color: #16A34A; padding-top: 4px;")
+        traversals_layout.addWidget(self.lbl_current_step)
 
         left_layout.addWidget(traversals_group)
 
@@ -156,6 +182,60 @@ class MainWindow(QMainWindow):
         parent_layout.addWidget(value_lbl)
         return value_lbl
 
+    def stop_animation(self):
+        """Detiene la animación en curso si está activa."""
+        if self.anim_timer.isActive():
+            self.anim_timer.stop()
+        self.anim_sequence = []
+        self.anim_index = 0
+        self.lbl_current_step.setText("Paso actual: -")
+
+    def on_play_traversal(self):
+        """Inicia la animación paso a paso del recorrido seleccionado."""
+        self.stop_animation()
+
+        mode = self.combo_traversal.currentText()
+        if mode == "Pre-orden":
+            sequence = self.tree.preorder()
+        elif mode == "In-orden":
+            sequence = self.tree.inorder()
+        else:
+            sequence = self.tree.postorder()
+
+        if not sequence:
+            self.statusBar().showMessage("No hay nodos activos para recorrer.")
+            return
+
+        self.anim_sequence = sequence
+        self.anim_index = 0
+        self._on_animation_step()
+        self.anim_timer.start()
+
+    def _on_animation_step(self):
+        """Ejecuta un paso de la animación resaltando el nodo actual."""
+        total = len(self.anim_sequence)
+        if self.anim_index < total:
+            current_val = self.anim_sequence[self.anim_index]
+            step_num = self.anim_index + 1
+            step_text = f"Paso actual: {current_val} ({step_num}/{total})"
+            self.lbl_current_step.setText(step_text)
+            self.refresh_ui(
+                status_msg=step_text,
+                highlight_value=current_val,
+                highlight_color="play",
+                preserve_step_label=True,
+            )
+            self.anim_index += 1
+        else:
+            self.anim_timer.stop()
+            self.anim_sequence = []
+            self.anim_index = 0
+            self.lbl_current_step.setText("Paso actual: Recorrido completado")
+            self.refresh_ui(
+                status_msg="Recorrido completado",
+                preserve_step_label=True,
+            )
+
     def _read_int_input(self) -> int | None:
         text = self.value_input.text().strip()
         if not text:
@@ -174,6 +254,7 @@ class MainWindow(QMainWindow):
         self.refresh_ui(message)
 
     def on_insert(self):
+        self.stop_animation()
         val = self._read_int_input()
         if val is None:
             return
@@ -181,6 +262,7 @@ class MainWindow(QMainWindow):
         self._persist_and_refresh(f"Nodo {val} insertado.")
 
     def on_delete(self):
+        self.stop_animation()
         val = self._read_int_input()
         if val is None:
             return
@@ -188,6 +270,7 @@ class MainWindow(QMainWindow):
         self._persist_and_refresh(f"Operación eliminar ({val}) ejecutada.")
 
     def on_search(self):
+        self.stop_animation()
         val = self._read_int_input()
         if val is None:
             return
@@ -203,6 +286,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Búsqueda", "Valor no encontrado")
 
     def on_deactivate(self):
+        self.stop_animation()
         val = self._read_int_input()
         if val is None:
             return
@@ -212,6 +296,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Desactivar", f"No se encontró el nodo {val} en el árbol.")
 
     def on_modify(self):
+        self.stop_animation()
         old_val = self._read_int_input()
         if old_val is None:
             return
@@ -227,6 +312,7 @@ class MainWindow(QMainWindow):
         self._persist_and_refresh(f"Valor {old_val} modificado por {new_val}.")
 
     def on_clear(self):
+        self.stop_animation()
         if self.tree.is_empty():
             return
         reply = QMessageBox.question(
@@ -262,10 +348,18 @@ class MainWindow(QMainWindow):
         status_msg: str = "",
         highlight_value: int | None = None,
         highlight_color: str = "search",
+        preserve_step_label: bool = False,
     ):
-        pre_str = ", ".join(map(str, self.tree.preorder())) or "(vacío)"
-        in_str = ", ".join(map(str, self.tree.inorder())) or "(vacío)"
-        post_str = ", ".join(map(str, self.tree.postorder())) or "(vacío)"
+        if not preserve_step_label:
+            self.lbl_current_step.setText("Paso actual: -")
+
+        pre_list = self.tree.preorder()
+        in_list = self.tree.inorder()
+        post_list = self.tree.postorder()
+
+        pre_str = ", ".join(map(str, pre_list)) or "(vacío)"
+        in_str = ", ".join(map(str, in_list)) or "(vacío)"
+        post_str = ", ".join(map(str, post_list)) or "(vacío)"
 
         self.lbl_preorder.setText(f"[{pre_str}]")
         self.lbl_inorder.setText(f"[{in_str}]")
@@ -275,6 +369,8 @@ class MainWindow(QMainWindow):
         active_count, total_count = _count_nodes(structure)
         counts_text = f"Nodos activos: {active_count} / Total: {total_count}"
         self.lbl_node_counts.setText(counts_text)
+
+        self.btn_play.setEnabled(active_count > 0)
 
         if status_msg:
             self.statusBar().showMessage(f"{status_msg} | {counts_text}")
