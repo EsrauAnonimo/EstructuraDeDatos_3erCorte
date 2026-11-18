@@ -14,13 +14,15 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from avl import AVLTree
-from graph_render import cleanup_temp_files, render_structure, render_to_pixmap, render_tree
+from graph_render import cleanup_temp_files, render_to_pixmap, render_tree
 from persistence import DEFAULT_DATA_PATH, save_tree
+from tree_canvas import TreeCanvas
 
 
 def _count_nodes(structure):
@@ -71,8 +73,9 @@ class MainWindow(QMainWindow):
         self.current_svg_path: str | None = None
 
         # Estado unificado de animación (sirve tanto para recorridos como para inserción)
+        self.base_step_ms: int = 650
         self.anim_timer = QTimer(self)
-        self.anim_timer.setInterval(650)
+        self.anim_timer.setInterval(self.base_step_ms)
         self.anim_timer.timeout.connect(self._on_animation_step)
         self.anim_mode: str | None = None  # "traversal" | "insert" | None
         self.anim_sequence: list[int] = []
@@ -250,7 +253,32 @@ class MainWindow(QMainWindow):
         return card
 
     def _build_canvas_card(self) -> QFrame:
-        card, layout = self._create_card("Visualización del Árbol AVL")
+        card = QFrame()
+        card.setObjectName("card")
+        _apply_shadow(card)
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(10)
+
+        header_row = QHBoxLayout()
+        lbl_title = QLabel("Visualización del Árbol AVL")
+        lbl_title.setObjectName("cardTitle")
+        header_row.addWidget(lbl_title)
+        header_row.addStretch()
+
+        self.btn_graphviz_mode = QPushButton("◈ Vista Graphviz")
+        self.btn_graphviz_mode.setObjectName("btnToggle")
+        self.btn_graphviz_mode.setCheckable(True)
+        self.btn_graphviz_mode.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_graphviz_mode.toggled.connect(self._on_toggle_view_mode)
+        header_row.addWidget(self.btn_graphviz_mode)
+        layout.addLayout(header_row)
+
+        divider = QFrame()
+        divider.setObjectName("softDivider")
+        divider.setFrameShape(QFrame.Shape.HLine)
+        layout.addWidget(divider)
 
         # Leyenda compacta de estados de nodos
         legend_row = QHBoxLayout()
@@ -278,7 +306,16 @@ class MainWindow(QMainWindow):
         self._set_banner_style("idle")
         layout.addWidget(self.lbl_anim_banner)
 
-        # Lienzo SVG
+        # Pila de vistas: lienzo animado 60 FPS (por defecto) o SVG de Graphviz
+        self.canvas_stack = QStackedWidget()
+
+        tree_container = QFrame()
+        tree_container.setObjectName("treeFrame")
+        tree_container_layout = QVBoxLayout(tree_container)
+        tree_container_layout.setContentsMargins(6, 6, 6, 6)
+        self.tree_canvas = TreeCanvas()
+        tree_container_layout.addWidget(self.tree_canvas)
+
         self.canvas_label = QLabel()
         self.canvas_label.setObjectName("canvasLabel")
         self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -286,7 +323,10 @@ class MainWindow(QMainWindow):
         self.canvas_label.setMinimumSize(460, 420)
         self.canvas_label.setWordWrap(True)
 
-        layout.addWidget(self.canvas_label, 1)
+        self.canvas_stack.addWidget(tree_container)
+        self.canvas_stack.addWidget(self.canvas_label)
+
+        layout.addWidget(self.canvas_stack, 1)
         return card
 
     def _make_btn(self, text: str, obj_name: str, handler) -> QPushButton:
@@ -327,19 +367,32 @@ class MainWindow(QMainWindow):
 
     def _on_speed_changed(self, index: int):
         if 0 <= index < len(SPEED_OPTIONS):
-            self.anim_timer.setInterval(SPEED_OPTIONS[index][1])
+            self.base_step_ms = SPEED_OPTIONS[index][1]
+            if not self.anim_timer.isActive():
+                self.anim_timer.setInterval(self.base_step_ms)
+
+    def _on_toggle_view_mode(self, use_graphviz: bool):
+        """Alterna entre el lienzo interactivo animado (60 FPS) y el SVG estático de Graphviz."""
+        if use_graphviz:
+            self.stop_animation()
+            self.canvas_stack.setCurrentIndex(1)
+            self._render_graphviz_view()
+        else:
+            self.canvas_stack.setCurrentIndex(0)
 
     def stop_animation(self):
         """Detiene la animación en curso y deja visible el estado real del árbol."""
         was_running = self.anim_timer.isActive() or self.anim_mode is not None
         if self.anim_timer.isActive():
             self.anim_timer.stop()
+        self.anim_timer.setInterval(self.base_step_ms)
         self.anim_mode = None
         self.anim_sequence = []
         self.insert_steps = []
         self.anim_index = 0
         self.btn_stop_anim.setEnabled(False)
         self.lbl_current_step.setText("Paso actual: -")
+        self.tree_canvas.clear_overlays()
         if was_running:
             self._set_banner_style("idle")
             self.lbl_anim_banner.setText("Listo · Visualizando estado actual del árbol.")
@@ -361,9 +414,13 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No hay nodos activos para recorrer.")
             return
 
+        if self.btn_graphviz_mode.isChecked():
+            self.btn_graphviz_mode.setChecked(False)
+
         self.anim_mode = "traversal"
         self.anim_sequence = sequence
         self.anim_index = 0
+        self.anim_timer.setInterval(self.base_step_ms)
         self.btn_stop_anim.setEnabled(True)
         self._on_animation_step()
         self.anim_timer.start()
@@ -395,6 +452,7 @@ class MainWindow(QMainWindow):
             self.anim_index += 1
         else:
             self.anim_timer.stop()
+            self.anim_timer.setInterval(self.base_step_ms)
             self.anim_mode = None
             self.anim_sequence = []
             self.anim_index = 0
@@ -414,28 +472,39 @@ class MainWindow(QMainWindow):
             step_num = self.anim_index + 1
             highlights = step["highlights"]
             message = step["message"]
+            phase = step.get("phase")
 
-            # Determinar tono del banner según la acción del paso
-            modes = set(highlights.values())
-            if "rotate" in modes:
+            # Determinar tono del banner y duración según la fase de inserción/balanceo
+            if phase in ("imbalance", "rotate") or "rotate" in highlights.values():
                 banner_mode = "rotate"
-            elif "insert" in modes:
+            elif phase in ("insert_leaf", "insert_root") or "insert" in highlights.values():
                 banner_mode = "insert"
-            elif "search" in modes:
+            elif phase == "duplicate" or "search" in highlights.values():
                 banner_mode = "search"
             else:
                 banner_mode = "visit"
+
+            if phase == "imbalance":
+                step_ms = int(self.base_step_ms * 1.25)
+                motion_ms = int(self.base_step_ms * 0.55)
+            elif phase == "rotate":
+                step_ms = int(self.base_step_ms * 1.35)
+                motion_ms = int(self.base_step_ms * 1.05)
+            else:
+                step_ms = self.base_step_ms
+                motion_ms = int(self.base_step_ms * 0.72)
 
             self._set_banner_style(banner_mode)
             self.lbl_anim_banner.setText(f"Paso {step_num}/{total} · {message}")
             self.lbl_current_step.setText(f"Inserción: paso {step_num}/{total}")
             self.statusBar().showMessage(message)
 
-            self.current_svg_path = render_structure(step["structure"], highlights=highlights)
-            self._update_canvas_pixmap()
+            self.anim_timer.setInterval(step_ms)
+            self.tree_canvas.play_trace_step(step, duration_ms=motion_ms)
             self.anim_index += 1
         else:
             self.anim_timer.stop()
+            self.anim_timer.setInterval(self.base_step_ms)
             self.anim_mode = None
             self.insert_steps = []
             self.anim_index = 0
@@ -475,11 +544,11 @@ class MainWindow(QMainWindow):
                 return None
         return values
 
-    def _persist_and_refresh(self, message: str = ""):
+    def _persist_and_refresh(self, message: str = "", animate_layout: bool = False):
         save_tree(self.tree, self.data_path)
         self.value_input.clear()
         self.value_input.setFocus()
-        self.refresh_ui(message)
+        self.refresh_ui(message, animate_layout=animate_layout)
 
     def on_insert(self):
         self.stop_animation()
@@ -499,6 +568,8 @@ class MainWindow(QMainWindow):
         self._update_metadata_ui()
 
         if self.chk_animate_insert.isChecked() and all_steps:
+            if self.btn_graphviz_mode.isChecked():
+                self.btn_graphviz_mode.setChecked(False)
             self.anim_mode = "insert"
             self.insert_steps = all_steps
             self.anim_index = 0
@@ -509,7 +580,12 @@ class MainWindow(QMainWindow):
             label = ", ".join(map(str, values))
             self._set_banner_style("insert")
             self.lbl_anim_banner.setText(f"Valor(es) {label} insertado(s) y balanceado(s).")
-            self.refresh_ui(f"Nodo(s) {label} insertado(s).", highlight_value=values[-1], highlight_color="insert")
+            self.refresh_ui(
+                f"Nodo(s) {label} insertado(s).",
+                highlight_value=values[-1],
+                highlight_color="insert",
+                animate_layout=True,
+            )
 
     def on_delete(self):
         self.stop_animation()
@@ -519,7 +595,7 @@ class MainWindow(QMainWindow):
         self.tree.delete(val)
         self._set_banner_style("idle")
         self.lbl_anim_banner.setText(f"Operación eliminar ({val}) aplicada.")
-        self._persist_and_refresh(f"Operación eliminar ({val}) ejecutada.")
+        self._persist_and_refresh(f"Operación eliminar ({val}) ejecutada.", animate_layout=True)
 
     def on_search(self):
         self.stop_animation()
@@ -569,7 +645,7 @@ class MainWindow(QMainWindow):
         self.tree.modify(old_val, new_val)
         self._set_banner_style("insert")
         self.lbl_anim_banner.setText(f"Valor {old_val} reemplazado por {new_val} y rebalanceado.")
-        self._persist_and_refresh(f"Valor {old_val} modificado por {new_val}.")
+        self._persist_and_refresh(f"Valor {old_val} modificado por {new_val}.", animate_layout=True)
 
     def on_clear(self):
         self.stop_animation()
@@ -613,7 +689,20 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self.current_svg_path:
+        if self.btn_graphviz_mode.isChecked() and self.current_svg_path:
+            self._update_canvas_pixmap()
+
+    def _render_graphviz_view(self, highlight_value: int | None = None, highlight_color: str = "search"):
+        self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if self.tree.is_empty():
+            self.current_svg_path = None
+            self._show_empty_state()
+        else:
+            self.current_svg_path = render_tree(
+                self.tree,
+                highlight_value=highlight_value,
+                highlight_color=highlight_color,
+            )
             self._update_canvas_pixmap()
 
     def _update_metadata_ui(self) -> str:
@@ -648,6 +737,7 @@ class MainWindow(QMainWindow):
         highlight_value: int | None = None,
         highlight_color: str = "search",
         preserve_step_label: bool = False,
+        animate_layout: bool = False,
     ):
         if not preserve_step_label:
             self.lbl_current_step.setText("Paso actual: -")
@@ -659,14 +749,9 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage(counts_text)
 
-        self.canvas_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if self.tree.is_empty():
-            self.current_svg_path = None
-            self._show_empty_state()
-        else:
-            self.current_svg_path = render_tree(
-                self.tree,
-                highlight_value=highlight_value,
-                highlight_color=highlight_color,
-            )
-            self._update_canvas_pixmap()
+        structure = self.tree.get_tree_structure()
+        highlights = {highlight_value: highlight_color} if highlight_value is not None else {}
+        self.tree_canvas.set_steady_tree(structure, highlights=highlights, animate_layout=animate_layout)
+
+        if self.btn_graphviz_mode.isChecked():
+            self._render_graphviz_view(highlight_value=highlight_value, highlight_color=highlight_color)

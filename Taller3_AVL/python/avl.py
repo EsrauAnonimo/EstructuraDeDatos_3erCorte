@@ -88,8 +88,10 @@ class AVLTree:
         if not self.root:
             self.root = Node(value)
             steps.append({
+                "phase": "insert_root",
                 "structure": self.get_tree_structure(),
                 "highlights": {value: "insert"},
+                "inserted": value,
                 "message": f"Nodo {value} insertado como raíz del árbol.",
             })
             return steps
@@ -99,16 +101,22 @@ class AVLTree:
         while current:
             if value < current.value:
                 steps.append({
+                    "phase": "visit",
                     "structure": self.get_tree_structure(),
                     "highlights": {current.value: "visit"},
+                    "probe_value": value,
+                    "probe_target": current.value,
                     "message": f"Comparando {value} < {current.value} → bajar a la izquierda.",
                 })
                 path.append((current, "left"))
                 current = current.left
             elif value > current.value:
                 steps.append({
+                    "phase": "visit",
                     "structure": self.get_tree_structure(),
                     "highlights": {current.value: "visit"},
+                    "probe_value": value,
+                    "probe_target": current.value,
                     "message": f"Comparando {value} > {current.value} → bajar a la derecha.",
                 })
                 path.append((current, "right"))
@@ -116,8 +124,11 @@ class AVLTree:
             else:
                 estado = "activo" if current.active else "inactivo"
                 steps.append({
+                    "phase": "duplicate",
                     "structure": self.get_tree_structure(),
                     "highlights": {current.value: "search"},
+                    "probe_value": value,
+                    "probe_target": current.value,
                     "message": f"El valor {value} ya existe ({estado}); no se permiten duplicados.",
                 })
                 return steps
@@ -125,8 +136,11 @@ class AVLTree:
         parent, direction = path[-1]
         setattr(parent, direction, Node(value))
         steps.append({
+            "phase": "insert_leaf",
             "structure": self.get_tree_structure(),
             "highlights": {value: "insert"},
+            "inserted": value,
+            "parent": parent.value,
             "message": f"Nodo {value} insertado como hijo {'izquierdo' if direction == 'left' else 'derecho'} de {parent.value}.",
         })
 
@@ -147,50 +161,77 @@ class AVLTree:
         if balance > 1:
             child_attr = "left"
             is_simple = self._balance_factor(node.left) >= 0
-            simple_fn, simple_name = self._rotate_right, "Rotación Simple Derecha (LL)"
+            simple_fn, simple_name, simple_dir = self._rotate_right, "Rotación Simple Derecha (LL)", "right"
             first_fn, second_fn = self._rotate_left, self._rotate_right
             dbl_name, short_name, dir1, dir2 = "Izquierda-Derecha (LR)", "I-D", "izquierda", "derecha"
+            rot_dir1, rot_dir2 = "left", "right"
         else:
             child_attr = "right"
             is_simple = self._balance_factor(node.right) <= 0
-            simple_fn, simple_name = self._rotate_left, "Rotación Simple Izquierda (RR)"
+            simple_fn, simple_name, simple_dir = self._rotate_left, "Rotación Simple Izquierda (RR)", "left"
             first_fn, second_fn = self._rotate_right, self._rotate_left
             dbl_name, short_name, dir1, dir2 = "Derecha-Izquierda (RL)", "D-I", "derecha", "izquierda"
+            rot_dir1, rot_dir2 = "right", "left"
 
         if is_simple:
             steps.append({
+                "phase": "imbalance",
                 "structure": self.get_tree_structure(),
                 "highlights": {node.value: "rotate", inserted_value: "insert"},
+                "pivot": node.value,
+                "fb": fb_str,
+                "rotation_dir": simple_dir,
                 "message": f"Desbalance en {node.value} (FB = {fb_str}) → {simple_name}.",
             })
             new_sub = simple_fn(node)
             self._attach_subtree(path, idx, new_sub)
             steps.append({
+                "phase": "rotate",
                 "structure": self.get_tree_structure(),
                 "highlights": {new_sub.value: "rotate", inserted_value: "insert"},
+                "pivot": new_sub.value,
                 "message": f"{simple_name} completada: {new_sub.value} sube como raíz del subárbol.",
             })
         else:
             child = getattr(node, child_attr)
             pivot_child = child.value
             steps.append({
+                "phase": "imbalance",
                 "structure": self.get_tree_structure(),
                 "highlights": {node.value: "rotate", pivot_child: "rotate", inserted_value: "insert"},
-                "message": f"Desbalance en {node.value} (FB = {fb_str}) → Rotación Doble {dbl_name}.",
+                "pivot": pivot_child,
+                "fb_node": node.value,
+                "fb": fb_str,
+                "rotation_dir": rot_dir1,
+                "message": f"Desbalance en {node.value} (FB = {fb_str}) → Rotación Doble {dbl_name} (1/2: {dir1} en {pivot_child}).",
             })
             rotated_child = first_fn(child)
             setattr(node, child_attr, rotated_child)
             steps.append({
+                "phase": "rotate",
                 "structure": self.get_tree_structure(),
                 "highlights": {rotated_child.value: "rotate", pivot_child: "rotate"},
-                "message": f"Rotación Doble {short_name} (1/2): rotación {dir1} en {pivot_child}.",
+                "pivot": rotated_child.value,
+                "message": f"Rotación Doble {short_name} (1/2) completada en {rotated_child.value}.",
+            })
+            steps.append({
+                "phase": "imbalance",
+                "structure": self.get_tree_structure(),
+                "highlights": {node.value: "rotate", rotated_child.value: "rotate"},
+                "pivot": node.value,
+                "fb_node": node.value,
+                "fb": fb_str,
+                "rotation_dir": rot_dir2,
+                "message": f"Rotación Doble {short_name} (2/2): rotación {dir2} en {node.value}.",
             })
             new_sub = second_fn(node)
             self._attach_subtree(path, idx, new_sub)
             steps.append({
+                "phase": "rotate",
                 "structure": self.get_tree_structure(),
                 "highlights": {new_sub.value: "rotate", inserted_value: "insert"},
-                "message": f"Rotación Doble {short_name} (2/2): rotación {dir2} en {node.value}.",
+                "pivot": new_sub.value,
+                "message": f"Rotación Doble {short_name} completada: {new_sub.value} sube como raíz del subárbol.",
             })
 
     def _attach_subtree(self, path, idx, new_subtree):
