@@ -241,26 +241,6 @@ QPushButton#btnSecondary:hover {{
     background-color: #475569;
 }}
 
-QPushButton#btnToggle {{
-    background-color: #F8FAFC;
-    color: #334155;
-    border: 1.5px solid #CBD5E1;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 9pt;
-    font-weight: 600;
-}}
-QPushButton#btnToggle:hover {{
-    background-color: #EFF6FF;
-    border-color: #93C5FD;
-    color: {PRIMARY};
-}}
-QPushButton#btnToggle:checked {{
-    background-color: {PRIMARY};
-    color: #FFFFFF;
-    border-color: {PRIMARY};
-}}
-
 QFrame#treeFrame {{
     background-color: #FAFCFF;
     border: 1.5px solid #E2E8F0;
@@ -286,15 +266,6 @@ QLabel#animBanner {{
     color: #334155;
     font-size: 9.8pt;
     font-weight: 600;
-}}
-
-QLabel#canvasLabel {{
-    background-color: #FAFCFF;
-    border: 1.5px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 16px;
-    color: {MUTED};
-    font-size: 10.5pt;
 }}
 
 QLabel#legendChip {{

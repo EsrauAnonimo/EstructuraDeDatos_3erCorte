@@ -54,31 +54,44 @@ def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
 
 
-def _collect_tree_info(structure: dict | None):
-    """Recorre en in-orden para asignar columna, profundidad, aristas y metadatos."""
+def _node_fields(node):
+    """Extrae (valor, izq, der, activo, altura) desde un objeto Node del AVL o un dict."""
+    if isinstance(node, dict):
+        return (
+            node["value"],
+            node.get("left"),
+            node.get("right"),
+            node.get("active", True),
+            node.get("height", 1),
+        )
+    return node.value, node.left, node.right, node.active, node.height
+
+
+def _collect_tree_info(root_node):
+    """Recorre el árbol en in-orden para asignar columna, profundidad, aristas y metadatos."""
     nodes = []
     edges = []
     meta = {}
 
-    def walk(node: dict, depth: int):
-        left = node.get("left")
-        right = node.get("right")
-        val = node["value"]
+    def walk(node, depth: int):
+        val, left, right, active, height = _node_fields(node)
 
         if left:
-            edges.append((val, left["value"]))
+            left_val = _node_fields(left)[0]
+            edges.append((val, left_val))
             walk(left, depth + 1)
 
         col = len(nodes)
         nodes.append((val, col, depth))
-        meta[val] = {"active": node.get("active", True), "height": node.get("height", 1)}
+        meta[val] = {"active": active, "height": height}
 
         if right:
-            edges.append((val, right["value"]))
+            right_val = _node_fields(right)[0]
+            edges.append((val, right_val))
             walk(right, depth + 1)
 
-    if structure:
-        walk(structure, 0)
+    if root_node:
+        walk(root_node, 0)
     return nodes, edges, meta
 
 
