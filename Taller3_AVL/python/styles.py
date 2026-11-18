@@ -1,16 +1,19 @@
 # Paleta de colores principal de la interfaz
 PRIMARY = "#2563EB"
-SUCCESS = "#16A34A"
-DANGER = "#DC2626"
+SUCCESS = "#10B981"
+DANGER = "#EF4444"
 WARNING = "#F59E0B"
-BG = "#F8FAFC"
+INDIGO = "#6366F1"
+CYAN = "#0EA5E9"
+BG = "#F1F5F9"
 PANEL = "#FFFFFF"
-TEXT = "#1E293B"
+TEXT = "#0F172A"
+MUTED = "#64748B"
 
 # Colores para el dibujo del árbol en Graphviz
-NODE_ACTIVE_FILL = "#DBEAFE"
+NODE_ACTIVE_FILL = "#EFF6FF"
 NODE_ACTIVE_BORDER = "#2563EB"
-NODE_ACTIVE_TEXT = "#1E293B"
+NODE_ACTIVE_TEXT = "#0F172A"
 
 NODE_INACTIVE_FILL = "#E5E7EB"
 NODE_INACTIVE_BORDER = "#9CA3AF"
@@ -22,55 +25,154 @@ HIGHLIGHT_SEARCH_BORDER = "#DC2626"
 HIGHLIGHT_PLAY_FILL = "#BBF7D0"
 HIGHLIGHT_PLAY_BORDER = "#16A34A"
 
-EDGE_COLOR = "#475569"
+HIGHLIGHT_VISIT_FILL = "#E0E7FF"
+HIGHLIGHT_VISIT_BORDER = "#4F46E5"
 
-# Hoja de estilos Qt (QSS)
+HIGHLIGHT_INSERT_FILL = "#A7F3D0"
+HIGHLIGHT_INSERT_BORDER = "#059669"
+
+HIGHLIGHT_ROTATE_FILL = "#FED7AA"
+HIGHLIGHT_ROTATE_BORDER = "#EA580C"
+
+EDGE_COLOR = "#64748B"
+
+# Hoja de estilos Qt (QSS) moderna y limpia
 APP_QSS = f"""
-QMainWindow, QWidget {{
+QMainWindow, QWidget#centralWidget {{
     background-color: {BG};
     color: {TEXT};
     font-family: "Segoe UI", sans-serif;
-    font-size: 10.5pt;
+    font-size: 10pt;
 }}
 
-QGroupBox {{
+QLabel {{
+    background-color: transparent;
+    color: {TEXT};
+}}
+
+QDialog, QMessageBox {{
+    background-color: {PANEL};
+    color: {TEXT};
+    font-family: "Segoe UI", sans-serif;
+    font-size: 10pt;
+}}
+
+QMessageBox QPushButton {{
+    min-width: 84px;
+    padding: 7px 14px;
+}}
+
+QFrame#headerBar {{
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #0F172A,
+        stop: 0.55 #1E293B,
+        stop: 1 #1D4ED8
+    );
+    border-radius: 14px;
+}}
+
+QLabel#headerTitle {{
+    color: #FFFFFF;
+    font-size: 13.5pt;
+    font-weight: 700;
+}}
+
+QLabel#headerSubtitle {{
+    color: #CBD5E1;
+    font-size: 9.5pt;
+}}
+
+QLabel#statBadge {{
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 9px;
+    padding: 5px 12px;
+    color: #F8FAFC;
+    font-size: 9.5pt;
+    font-weight: 600;
+}}
+
+QFrame#card {{
     background-color: {PANEL};
     border: 1px solid #E2E8F0;
-    border-radius: 10px;
-    margin-top: 12px;
-    padding: 14px;
-    font-weight: 600;
+    border-radius: 14px;
+}}
+
+QLabel#cardTitle {{
     color: {TEXT};
+    font-size: 11pt;
+    font-weight: 700;
 }}
 
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    left: 12px;
-    padding: 0 6px;
-    color: {PRIMARY};
+QLabel#fieldLabel {{
+    color: #475569;
+    font-size: 9.5pt;
+    font-weight: 600;
 }}
 
-QLineEdit, QComboBox {{
-    background-color: #FFFFFF;
+QFrame#softDivider {{
+    background-color: #E2E8F0;
+    max-height: 1px;
+    border: none;
+}}
+
+QLineEdit {{
+    background-color: #F8FAFC;
     border: 1.5px solid #CBD5E1;
-    border-radius: 7px;
-    padding: 7px 10px;
+    border-radius: 9px;
+    padding: 8px 12px;
     font-size: 10.5pt;
     color: {TEXT};
+    min-height: 22px;
 }}
 
-QLineEdit:focus, QComboBox:focus {{
+QLineEdit:focus {{
+    background-color: #FFFFFF;
     border: 1.5px solid {PRIMARY};
+}}
+
+QComboBox {{
+    background-color: #F8FAFC;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 9px;
+    padding: 6px 10px;
+    font-size: 9.8pt;
+    color: {TEXT};
+    min-height: 22px;
+}}
+
+QComboBox:hover, QComboBox:focus {{
+    border: 1.5px solid {PRIMARY};
+    background-color: #FFFFFF;
+}}
+
+QComboBox QAbstractItemView {{
+    background-color: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    selection-background-color: #DBEAFE;
+    selection-color: {TEXT};
+    padding: 4px;
+}}
+
+QCheckBox {{
+    background-color: transparent;
+    color: #334155;
+    font-size: 9.5pt;
+    font-weight: 600;
+    spacing: 8px;
 }}
 
 QPushButton {{
     background-color: {PRIMARY};
     color: #FFFFFF;
     border: none;
-    border-radius: 7px;
-    padding: 8px 14px;
+    border-radius: 9px;
+    padding: 8px 12px;
+    font-size: 9.8pt;
     font-weight: 600;
+    min-height: 20px;
 }}
 
 QPushButton:hover {{
@@ -82,22 +184,32 @@ QPushButton:pressed {{
 }}
 
 QPushButton:disabled {{
-    background-color: #94A3B8;
-    color: #F1F5F9;
+    background-color: #CBD5E1;
+    color: #F8FAFC;
 }}
 
 QPushButton#btnSuccess {{
     background-color: {SUCCESS};
 }}
 QPushButton#btnSuccess:hover {{
-    background-color: #15803D;
+    background-color: #059669;
 }}
 
 QPushButton#btnDanger {{
     background-color: {DANGER};
 }}
 QPushButton#btnDanger:hover {{
-    background-color: #B91C1C;
+    background-color: #DC2626;
+}}
+
+QPushButton#btnSoftDanger {{
+    background-color: #FEF2F2;
+    color: #DC2626;
+    border: 1.5px solid #FECACA;
+}}
+QPushButton#btnSoftDanger:hover {{
+    background-color: #FEE2E2;
+    border-color: #FCA5A5;
 }}
 
 QPushButton#btnWarning {{
@@ -108,37 +220,73 @@ QPushButton#btnWarning:hover {{
     background-color: #D97706;
 }}
 
+QPushButton#btnIndigo {{
+    background-color: {INDIGO};
+}}
+QPushButton#btnIndigo:hover {{
+    background-color: #4F46E5;
+}}
+
+QPushButton#btnPlay {{
+    background-color: {CYAN};
+}}
+QPushButton#btnPlay:hover {{
+    background-color: #0284C7;
+}}
+
 QPushButton#btnSecondary {{
-    background-color: #475569;
+    background-color: #64748B;
 }}
 QPushButton#btnSecondary:hover {{
-    background-color: #334155;
+    background-color: #475569;
 }}
 
 QLabel#traversalValue {{
-    background-color: #F1F5F9;
+    background-color: #F8FAFC;
     border: 1px solid #E2E8F0;
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: 8px;
+    padding: 7px 10px;
     font-family: "Consolas", "Segoe UI", monospace;
-    font-size: 10pt;
+    font-size: 9.5pt;
     color: {TEXT};
+    min-height: 18px;
+}}
+
+QLabel#animBanner {{
+    background-color: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 9px;
+    padding: 8px 12px;
+    color: #334155;
+    font-size: 9.8pt;
+    font-weight: 600;
 }}
 
 QLabel#canvasLabel {{
-    background-color: {PANEL};
-    border: 1px solid #CBD5E1;
-    border-radius: 10px;
+    background-color: #FAFCFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
     padding: 16px;
-    color: #64748B;
-    font-size: 11pt;
+    color: {MUTED};
+    font-size: 10.5pt;
+}}
+
+QLabel#legendChip {{
+    background-color: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: #475569;
 }}
 
 QStatusBar {{
     background-color: {PANEL};
     border-top: 1px solid #E2E8F0;
-    color: {TEXT};
+    color: #475569;
+    font-size: 9.5pt;
     font-weight: 600;
-    padding: 4px 10px;
+    padding: 4px 14px;
 }}
 """

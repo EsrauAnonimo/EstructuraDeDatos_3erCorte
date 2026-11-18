@@ -12,10 +12,16 @@ from PyQt6.QtSvg import QSvgRenderer
 from avl import AVLTree
 from styles import (
     EDGE_COLOR,
+    HIGHLIGHT_INSERT_BORDER,
+    HIGHLIGHT_INSERT_FILL,
     HIGHLIGHT_PLAY_BORDER,
     HIGHLIGHT_PLAY_FILL,
+    HIGHLIGHT_ROTATE_BORDER,
+    HIGHLIGHT_ROTATE_FILL,
     HIGHLIGHT_SEARCH_BORDER,
     HIGHLIGHT_SEARCH_FILL,
+    HIGHLIGHT_VISIT_BORDER,
+    HIGHLIGHT_VISIT_FILL,
     NODE_ACTIVE_BORDER,
     NODE_ACTIVE_FILL,
     NODE_ACTIVE_TEXT,
@@ -26,6 +32,15 @@ from styles import (
 
 # Directorio temporal exclusivo para los archivos SVG generados por la aplicación
 TEMP_RENDER_DIR = os.path.join(tempfile.gettempdir(), "paa_avl_renders")
+
+# Mapa de estilos según el tipo de resaltado visual
+HIGHLIGHT_STYLES = {
+    "search": (HIGHLIGHT_SEARCH_FILL, HIGHLIGHT_SEARCH_BORDER),
+    "play": (HIGHLIGHT_PLAY_FILL, HIGHLIGHT_PLAY_BORDER),
+    "visit": (HIGHLIGHT_VISIT_FILL, HIGHLIGHT_VISIT_BORDER),
+    "insert": (HIGHLIGHT_INSERT_FILL, HIGHLIGHT_INSERT_BORDER),
+    "rotate": (HIGHLIGHT_ROTATE_FILL, HIGHLIGHT_ROTATE_BORDER),
+}
 
 
 def _ensure_graphviz_in_path():
@@ -64,7 +79,7 @@ def cleanup_temp_files():
         os.makedirs(TEMP_RENDER_DIR, exist_ok=True)
 
 
-def _build_dot_lines(node: dict, lines: list[str], highlight_value: int | None, highlight_color: str):
+def _build_dot_lines(node: dict, lines: list[str], highlights: dict[int, str]):
     """Recorre recursivamente la estructura del árbol para generar nodos y aristas en DOT."""
     val = node["value"]
     active = node.get("active", True)
@@ -73,32 +88,32 @@ def _build_dot_lines(node: dict, lines: list[str], highlight_value: int | None, 
     label = f"{val}" if active else f"{val} (inactivo)"
 
     if active:
+        shape = "circle"
         fill = NODE_ACTIVE_FILL
         border = NODE_ACTIVE_BORDER
         fontcolor = NODE_ACTIVE_TEXT
         style = "filled"
+        extra = ""
     else:
+        shape = "box"
         fill = NODE_INACTIVE_FILL
         border = NODE_INACTIVE_BORDER
         fontcolor = NODE_INACTIVE_TEXT
-        style = "filled,dashed"
+        style = "filled,dashed,rounded"
+        extra = ', margin="0.14,0.08"'
 
-    penwidth = "2"
+    penwidth = "2.2"
 
-    # Aplicar resaltado si coincide con el valor buscado o reproducido
-    if highlight_value is not None and val == highlight_value:
-        penwidth = "3"
-        if highlight_color == "play":
-            fill = HIGHLIGHT_PLAY_FILL
-            border = HIGHLIGHT_PLAY_BORDER
-        else:
-            fill = HIGHLIGHT_SEARCH_FILL
-            border = HIGHLIGHT_SEARCH_BORDER
+    # Aplicar resaltado según el rol del nodo en la animación o búsqueda
+    mode = highlights.get(val)
+    if mode:
+        fill, border = HIGHLIGHT_STYLES.get(mode, HIGHLIGHT_STYLES["search"])
         fontcolor = NODE_ACTIVE_TEXT
+        penwidth = "3.4"
 
     lines.append(
-        f'    "{node_id}" [label="{label}", fillcolor="{fill}", color="{border}", '
-        f'fontcolor="{fontcolor}", style="{style}", penwidth={penwidth}];'
+        f'    "{node_id}" [shape={shape}, label="{label}", fillcolor="{fill}", color="{border}", '
+        f'fontcolor="{fontcolor}", style="{style}", penwidth={penwidth}{extra}];'
     )
 
     left = node.get("left")
@@ -106,8 +121,8 @@ def _build_dot_lines(node: dict, lines: list[str], highlight_value: int | None, 
 
     if left:
         left_id = f"n_{left['value']}"
-        _build_dot_lines(left, lines, highlight_value, highlight_color)
-        lines.append(f'    "{node_id}" -> "{left_id}" [color="{EDGE_COLOR}", penwidth=1.6];')
+        _build_dot_lines(left, lines, highlights)
+        lines.append(f'    "{node_id}" -> "{left_id}" [color="{EDGE_COLOR}", penwidth=1.7];')
     elif right:
         # Nodo invisible para mantener la orientación visual izquierda/derecha cuando solo hay hijo derecho
         ghost_left = f"g_l_{val}"
@@ -116,8 +131,8 @@ def _build_dot_lines(node: dict, lines: list[str], highlight_value: int | None, 
 
     if right:
         right_id = f"n_{right['value']}"
-        _build_dot_lines(right, lines, highlight_value, highlight_color)
-        lines.append(f'    "{node_id}" -> "{right_id}" [color="{EDGE_COLOR}", penwidth=1.6];')
+        _build_dot_lines(right, lines, highlights)
+        lines.append(f'    "{node_id}" -> "{right_id}" [color="{EDGE_COLOR}", penwidth=1.7];')
     elif left:
         # Nodo invisible para mantener la orientación visual izquierda/derecha cuando solo hay hijo izquierdo
         ghost_right = f"g_r_{val}"
@@ -125,28 +140,29 @@ def _build_dot_lines(node: dict, lines: list[str], highlight_value: int | None, 
         lines.append(f'    "{node_id}" -> "{ghost_right}" [style=invis];')
 
 
-def render_tree(
-    tree: AVLTree,
+def render_structure(
+    structure: dict | None,
     highlight_value: int | None = None,
     highlight_color: str = "search",
+    highlights: dict[int, str] | None = None,
 ) -> str | None:
-    """Renderiza el árbol AVL a un archivo SVG temporal usando Graphviz y devuelve su ruta."""
-    if tree.is_empty():
-        return None
-
-    structure = tree.get_tree_structure()
+    """Renderiza una estructura serializada de árbol AVL a SVG temporal usando Graphviz."""
     if not structure:
         return None
+
+    merged_highlights = dict(highlights) if highlights else {}
+    if highlight_value is not None:
+        merged_highlights[highlight_value] = highlight_color
 
     os.makedirs(TEMP_RENDER_DIR, exist_ok=True)
 
     lines = [
         "digraph AVL {",
-        '    graph [rankdir=TB, splines=polyline, nodesep=0.4, ranksep=0.6, bgcolor="transparent"];',
-        '    node [shape=circle, fontname="Segoe UI Semibold", fontsize=11, width=0.65, fixedsize=false];',
-        '    edge [arrowsize=0.7];',
+        '    graph [rankdir=TB, splines=polyline, nodesep=0.45, ranksep=0.65, bgcolor="transparent", pad=0.18];',
+        '    node [shape=circle, fontname="Segoe UI Semibold", fontsize=11.5, width=0.68, fixedsize=false, margin=0.06];',
+        '    edge [arrowhead=vee, arrowsize=0.72];',
     ]
-    _build_dot_lines(structure, lines, highlight_value, highlight_color)
+    _build_dot_lines(structure, lines, merged_highlights)
     lines.append("}")
     dot_source = "\n".join(lines)
 
@@ -156,6 +172,23 @@ def render_tree(
     src = graphviz.Source(dot_source, format="svg")
     svg_path = src.render(filename=output_base, cleanup=True)
     return svg_path
+
+
+def render_tree(
+    tree: AVLTree,
+    highlight_value: int | None = None,
+    highlight_color: str = "search",
+    highlights: dict[int, str] | None = None,
+) -> str | None:
+    """Renderiza el árbol AVL a un archivo SVG temporal usando Graphviz y devuelve su ruta."""
+    if tree.is_empty():
+        return None
+    return render_structure(
+        tree.get_tree_structure(),
+        highlight_value=highlight_value,
+        highlight_color=highlight_color,
+        highlights=highlights,
+    )
 
 
 def render_to_pixmap(svg_path: str, width: int, height: int) -> QPixmap:
@@ -170,7 +203,7 @@ def render_to_pixmap(svg_path: str, width: int, height: int) -> QPixmap:
 
     if default_size.width() > 0 and default_size.height() > 0:
         scale = min(avail_w / default_size.width(), avail_h / default_size.height())
-        scale = min(scale, 1.8)
+        scale = min(scale, 1.85)
         target_w = max(1, int(default_size.width() * scale))
         target_h = max(1, int(default_size.height() * scale))
     else:

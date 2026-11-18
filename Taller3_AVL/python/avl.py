@@ -81,6 +81,126 @@ class AVLTree:
     def insert(self, value):
         self.root = self._insert(self.root, value)
 
+    def insert_with_trace(self, value):
+        """Inserta un valor y devuelve los pasos visuales del recorrido, inserción y rotaciones."""
+        steps = []
+
+        if not self.root:
+            self.root = Node(value)
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {value: "insert"},
+                "message": f"Nodo {value} insertado como raíz del árbol.",
+            })
+            return steps
+
+        path = []
+        current = self.root
+        while current:
+            if value < current.value:
+                steps.append({
+                    "structure": self.get_tree_structure(),
+                    "highlights": {current.value: "visit"},
+                    "message": f"Comparando {value} < {current.value} → bajar a la izquierda.",
+                })
+                path.append((current, "left"))
+                current = current.left
+            elif value > current.value:
+                steps.append({
+                    "structure": self.get_tree_structure(),
+                    "highlights": {current.value: "visit"},
+                    "message": f"Comparando {value} > {current.value} → bajar a la derecha.",
+                })
+                path.append((current, "right"))
+                current = current.right
+            else:
+                estado = "activo" if current.active else "inactivo"
+                steps.append({
+                    "structure": self.get_tree_structure(),
+                    "highlights": {current.value: "search"},
+                    "message": f"El valor {value} ya existe ({estado}); no se permiten duplicados.",
+                })
+                return steps
+
+        parent, direction = path[-1]
+        setattr(parent, direction, Node(value))
+        steps.append({
+            "structure": self.get_tree_structure(),
+            "highlights": {value: "insert"},
+            "message": f"Nodo {value} insertado como hijo {'izquierdo' if direction == 'left' else 'derecho'} de {parent.value}.",
+        })
+
+        for idx in range(len(path) - 1, -1, -1):
+            self._rebalance_with_trace(path, idx, value, steps)
+
+        return steps
+
+    def _rebalance_with_trace(self, path, idx, inserted_value, steps):
+        """Actualiza altura del nodo en path[idx] y registra pasos si ocurre rotación."""
+        node, _ = path[idx]
+        self._update_height(node)
+        balance = self._balance_factor(node)
+        if -1 <= balance <= 1:
+            return
+
+        fb_str = f"+{balance}" if balance > 0 else str(balance)
+        if balance > 1:
+            child_attr = "left"
+            is_simple = self._balance_factor(node.left) >= 0
+            simple_fn, simple_name = self._rotate_right, "Rotación Simple Derecha (LL)"
+            first_fn, second_fn = self._rotate_left, self._rotate_right
+            dbl_name, short_name, dir1, dir2 = "Izquierda-Derecha (LR)", "I-D", "izquierda", "derecha"
+        else:
+            child_attr = "right"
+            is_simple = self._balance_factor(node.right) <= 0
+            simple_fn, simple_name = self._rotate_left, "Rotación Simple Izquierda (RR)"
+            first_fn, second_fn = self._rotate_right, self._rotate_left
+            dbl_name, short_name, dir1, dir2 = "Derecha-Izquierda (RL)", "D-I", "derecha", "izquierda"
+
+        if is_simple:
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {node.value: "rotate", inserted_value: "insert"},
+                "message": f"Desbalance en {node.value} (FB = {fb_str}) → {simple_name}.",
+            })
+            new_sub = simple_fn(node)
+            self._attach_subtree(path, idx, new_sub)
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {new_sub.value: "rotate", inserted_value: "insert"},
+                "message": f"{simple_name} completada: {new_sub.value} sube como raíz del subárbol.",
+            })
+        else:
+            child = getattr(node, child_attr)
+            pivot_child = child.value
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {node.value: "rotate", pivot_child: "rotate", inserted_value: "insert"},
+                "message": f"Desbalance en {node.value} (FB = {fb_str}) → Rotación Doble {dbl_name}.",
+            })
+            rotated_child = first_fn(child)
+            setattr(node, child_attr, rotated_child)
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {rotated_child.value: "rotate", pivot_child: "rotate"},
+                "message": f"Rotación Doble {short_name} (1/2): rotación {dir1} en {pivot_child}.",
+            })
+            new_sub = second_fn(node)
+            self._attach_subtree(path, idx, new_sub)
+            steps.append({
+                "structure": self.get_tree_structure(),
+                "highlights": {new_sub.value: "rotate", inserted_value: "insert"},
+                "message": f"Rotación Doble {short_name} (2/2): rotación {dir2} en {node.value}.",
+            })
+
+    def _attach_subtree(self, path, idx, new_subtree):
+        """Reconecta un subárbol rotado en la raíz o en su nodo padre."""
+        if idx == 0:
+            self.root = new_subtree
+        else:
+            parent, parent_dir = path[idx - 1]
+            setattr(parent, parent_dir, new_subtree)
+
     def _insert(self, node, value):
         if not node:
             return Node(value)
