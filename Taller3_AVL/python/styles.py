@@ -50,14 +50,22 @@ QLabel {{
     color: {TEXT};
 }}
 
-QDialog, QMessageBox {{
+QDialog, QMessageBox, QInputDialog {{
     background-color: {PANEL};
     color: {TEXT};
     font-family: "Segoe UI", sans-serif;
     font-size: 10pt;
 }}
 
-QMessageBox QPushButton {{
+QSpinBox {{
+    background-color: #F8FAFC;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: {TEXT};
+}}
+
+QMessageBox QPushButton, QInputDialog QPushButton {{
     min-width: 84px;
     padding: 7px 14px;
 }}
@@ -149,11 +157,26 @@ QComboBox:hover, QComboBox:focus {{
 
 QComboBox QAbstractItemView {{
     background-color: #FFFFFF;
+    color: {TEXT};
     border: 1px solid #CBD5E1;
-    border-radius: 8px;
     selection-background-color: #DBEAFE;
     selection-color: {TEXT};
+    outline: none;
     padding: 4px;
+}}
+
+QComboBox QAbstractItemView::item {{
+    background-color: #FFFFFF;
+    color: {TEXT};
+    padding: 6px 10px;
+    border-radius: 6px;
+    min-height: 22px;
+}}
+
+QComboBox QAbstractItemView::item:hover,
+QComboBox QAbstractItemView::item:selected {{
+    background-color: #DBEAFE;
+    color: {TEXT};
 }}
 
 QCheckBox {{

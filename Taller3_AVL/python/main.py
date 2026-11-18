@@ -34,6 +34,7 @@ def ask_initial_tree(parent=None) -> AVLTree:
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     app.setStyleSheet(APP_QSS)
 
     initial_tree = ask_initial_tree()
