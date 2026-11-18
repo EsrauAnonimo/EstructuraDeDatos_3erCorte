@@ -403,8 +403,10 @@ class TreeCanvas(QWidget):
                 continue
             ux, uy = dx / dist, dy / dist
 
-            start_pad = r + 2.0 if self.node_meta.get(parent_val, {}).get("active", True) else 22.0
-            end_pad = r + 3.0 if self.node_meta.get(child_val, {}).get("active", True) else 24.0
+            parent_active = self.node_meta.get(parent_val, {}).get("active", True)
+            child_active = self.node_meta.get(child_val, {}).get("active", True)
+            start_pad = (r + 2.0) if parent_active else min(38.0 / max(abs(ux), 0.01), 23.0 / max(abs(uy), 0.01))
+            end_pad = (r + 3.0) if child_active else min(39.0 / max(abs(ux), 0.01), 24.0 / max(abs(uy), 0.01))
 
             sx, sy = px + ux * start_pad, py + uy * start_pad
             ex, ey = cx - ux * end_pad, cy - uy * end_pad
