@@ -1,0 +1,5 @@
+matplotlib>=3.8
+folium>=0.15
+PyQt6>=6.5
+PyQt6-WebEngine>=6.5
+graphviz>=0.20
