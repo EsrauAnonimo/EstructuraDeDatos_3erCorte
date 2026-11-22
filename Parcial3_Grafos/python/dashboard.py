@@ -54,6 +54,7 @@ class DashboardWidget(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         container = QWidget()
+        container.setObjectName("scrollContent")
         self.layout_container = QVBoxLayout(container)
         self.layout_container.setContentsMargins(14, 14, 14, 14)
         self.layout_container.setSpacing(18)

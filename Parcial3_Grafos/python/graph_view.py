@@ -6,6 +6,9 @@ Description: Matplotlib rendering of the PERA network embedded in PyQt6.
 """
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QCursor
+from PyQt6.QtWidgets import QToolTip
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch
@@ -94,7 +97,7 @@ def _path_edges(path: list[str] | None) -> list[tuple[str, str]]:
     return [(path[i], path[i + 1]) for i in range(len(path) - 1)]
 
 
-def _node_style(city: dict, origin: str | None, destination: str | None) -> dict:
+def _node_style(city: dict, origin: str | None, destination: str | None, via=None) -> dict:
     """Devuelve relleno, borde, grosor y tipo de línea del nodo según su rol."""
     cid = city["id"]
     if not city.get("active", True):
@@ -103,6 +106,8 @@ def _node_style(city: dict, origin: str | None, destination: str | None) -> dict
         return {"fill": NODE_ORIGIN_FILL, "border": NODE_ORIGIN_BORDER, "width": 3.0, "style": "-"}
     if cid == destination:
         return {"fill": NODE_DEST_FILL, "border": NODE_DEST_BORDER, "width": 3.0, "style": "-"}
+    if cid in (via or ()):
+        return {"fill": "#FEE2E2", "border": EDGE_PATH_COLOR, "width": 2.0, "style": "-"}
     return {"fill": NODE_CITY_FILL, "border": NODE_CITY_BORDER, "width": 1.2, "style": "-"}
 
 
@@ -122,9 +127,9 @@ def _make_arrow(start, end, color, width, animated=False) -> FancyArrowPatch:
     )
 
 
-def _draw_node(ax, city: dict, xy, origin=None, destination=None, animated=False) -> list:
+def _draw_node(ax, city: dict, xy, origin=None, destination=None, animated=False, via=None) -> list:
     """Dibuja el círculo de una ciudad y su ID. Retorna los dos artistas."""
-    st = _node_style(city, origin, destination)
+    st = _node_style(city, origin, destination, via)
     node = ax.scatter(
         [xy[0]], [xy[1]], s=NODE_SIZE, zorder=3, animated=animated,
         facecolors=st["fill"], edgecolors=st["border"],
@@ -135,7 +140,7 @@ def _draw_node(ax, city: dict, xy, origin=None, destination=None, animated=False
     return [node, text]
 
 
-def draw_network(ax, graph: Graph) -> dict:
+def draw_network(ax, graph: Graph, show_labels: bool = True) -> dict:
     """
     Dibuja la red base: todas las aristas en gris y los nodos sin origen/destino.
     Retorna posiciones y etiquetas para luego superponer la ruta.
@@ -167,8 +172,9 @@ def draw_network(ax, graph: Graph) -> dict:
     for (a, b), dist_set in distances.items():
         xy = ((pos[a][0] + pos[b][0]) / 2, (pos[a][1] + pos[b][1]) / 2)
         text = "/".join(f"{d:.0f}" for d in sorted(dist_set)) + " km"
-        ax.text(xy[0], xy[1], text, fontsize=6.5, color="#475569", ha="center", va="center", zorder=2,
-                bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.8})
+        if show_labels:
+            ax.text(xy[0], xy[1], text, fontsize=6.5, color="#475569", ha="center", va="center", zorder=2,
+                    bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none", "alpha": 0.8})
         base["labels"][(a, b)] = (xy, text)
 
     for cid, xy in pos.items():
@@ -223,9 +229,10 @@ def draw_route_overlay(ax, base: dict, path=None, origin=None, destination=None,
                 bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none"},
             ))
 
-    for cid in (origin, destination):
+    via = set(path[1:-1]) if path else set()
+    for cid in [*via, origin, destination]:
         if cid in cities:
-            overlay.extend(_draw_node(ax, cities[cid], pos[cid], origin, destination, animated))
+            overlay.extend(_draw_node(ax, cities[cid], pos[cid], origin, destination, animated, via))
     return overlay
 
 
@@ -244,7 +251,11 @@ class GraphCanvas(FigureCanvasQTAgg):
     - La red base solo se vuelve a dibujar si el grafo cambió (firma/hash).
     - La ruta es una capa 'animated': al cambiar, se restaura el fondo cacheado
       y solo se pintan las flechas rojas y los nodos origen/destino (blitting).
+    Además: tooltip al pasar el mouse por una ciudad y señal al hacer clic.
     """
+
+    # Emite (id_ciudad, botón): 1 = clic izquierdo, 3 = clic derecho
+    city_clicked = pyqtSignal(str, int)
 
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(8, 8), dpi=100, facecolor="#FAFCFF")
@@ -257,8 +268,59 @@ class GraphCanvas(FigureCanvasQTAgg):
         self._background = None  # imagen cacheada de la red base
         self._graph_key = None
         self._route_key = None
+        self._show_labels = True
+        self._last_args = None  # (graph, path, origin, destination) del último update_view
+        self._hover_city = None
         # Tras cada render completo (inicio, resize) se recaptura el fondo
         self.mpl_connect("draw_event", self._on_draw)
+        self.mpl_connect("motion_notify_event", self._on_mouse_move)
+        self.mpl_connect("button_press_event", self._on_mouse_press)
+        self.setMouseTracking(True)
+
+    # ------------------------------------------------------------------ interacción
+    def _city_at(self, event) -> str | None:
+        """Retorna la ciudad bajo el cursor (o None) comparando en píxeles."""
+        if not self._base or not self._base["pos"] or event.x is None:
+            return None
+        radius_px = NODE_RADIUS_PTS * self.fig.dpi / 72
+        to_px = self.ax.transData.transform
+        for cid, xy in self._base["pos"].items():
+            px, py = to_px(xy)
+            if (px - event.x) ** 2 + (py - event.y) ** 2 <= radius_px ** 2:
+                return cid
+        return None
+
+    def _on_mouse_move(self, event):
+        cid = self._city_at(event)
+        if cid == self._hover_city:
+            return
+        self._hover_city = cid
+        if cid is None:
+            self.unsetCursor()
+            QToolTip.hideText()
+            return
+        city = self._base["cities"][cid]
+        state = "Activa" if city.get("active", True) else "Inactiva"
+        fuel = f"${city.get('fuel_price_cop', 0):,.0f}".replace(",", ".")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        QToolTip.showText(
+            QCursor.pos(),
+            f"<b>{city['name']} ({cid})</b><br>Estado: {state}<br>Gasolina: {fuel} COP/galón"
+            "<br><i>Clic izq.: origen · Clic der.: destino</i>",
+            self,
+        )
+
+    def _on_mouse_press(self, event):
+        cid = self._city_at(event)
+        if cid and event.button in (1, 3):
+            self.city_clicked.emit(cid, int(event.button))
+
+    def set_show_labels(self, show: bool):
+        """Muestra u oculta las etiquetas de distancia (requiere redibujar la red base)."""
+        self._show_labels = bool(show)
+        self._graph_key = None  # fuerza el redibujo completo
+        if self._last_args:
+            self.update_view(*self._last_args)
 
     def _on_draw(self, event):
         self._background = self.copy_from_bbox(self.fig.bbox)
@@ -270,6 +332,7 @@ class GraphCanvas(FigureCanvasQTAgg):
 
     def update_view(self, graph: Graph, path=None, origin=None, destination=None) -> bool:
         """Actualiza la vista si algo cambió. Retorna True si hubo redibujo."""
+        self._last_args = (graph, path, origin, destination)
         graph_key = graph_signature(graph)
         route_key = (tuple(path or []), origin, destination)
 
@@ -277,7 +340,7 @@ class GraphCanvas(FigureCanvasQTAgg):
             return False  # nada cambió: se reutiliza lo ya dibujado
 
         if graph_key != self._graph_key:
-            self._base = draw_network(self.ax, graph)  # ax.clear() también quita la ruta anterior
+            self._base = draw_network(self.ax, graph, self._show_labels)  # ax.clear() también quita la ruta anterior
             self._background = None
             self._graph_key = graph_key
         else:

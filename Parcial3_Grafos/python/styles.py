@@ -284,6 +284,123 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
     height: 0px;
 }}
 
+QTableWidget {{
+    alternate-background-color: #F8FAFC;
+}}
+
+/* Panel de rutas: textos de ayuda, tarjetas y estados */
+QLabel#fieldLabel {{
+    color: #334155;
+    font-weight: 600;
+    font-size: 9.5pt;
+}}
+
+QLabel#hintLabel {{
+    color: {MUTED};
+    font-size: 9pt;
+}}
+
+QLabel#sectionTitle {{
+    color: {TEXT};
+    font-weight: 700;
+    font-size: 9.5pt;
+    padding-top: 4px;
+}}
+
+QLabel#emptyState {{
+    color: {MUTED};
+    font-size: 9.5pt;
+    background-color: #F8FAFC;
+    border: 1.5px dashed #CBD5E1;
+    border-radius: 10px;
+    padding: 14px;
+}}
+
+QFrame#errorBox {{
+    background-color: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 10px;
+}}
+
+QLabel#errorText {{
+    color: {DANGER};
+    font-weight: 700;
+}}
+
+QLabel#routePath {{
+    font-size: 12pt;
+}}
+
+QFrame#statTile {{
+    background-color: #F8FAFC;
+    border: 1px solid {BORDER};
+    border-radius: 10px;
+}}
+
+QFrame#statTileTotal {{
+    background-color: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: 10px;
+}}
+
+QLabel#statLabel {{
+    color: {MUTED};
+    font-size: 8.5pt;
+}}
+
+QLabel#statValue {{
+    color: {TEXT};
+    font-size: 12pt;
+    font-weight: 700;
+}}
+
+QLabel#statValueTotal {{
+    color: {SUCCESS};
+    font-size: 13pt;
+    font-weight: 700;
+}}
+
+QLabel#legsLabel {{
+    color: {TEXT};
+    font-size: 9pt;
+}}
+
+QPushButton#btnSwap {{
+    background-color: transparent;
+    color: {PRIMARY};
+    border: 1px dashed #93C5FD;
+    padding: 4px 10px;
+    min-height: 18px;
+    font-size: 9pt;
+}}
+QPushButton#btnSwap:hover {{
+    background-color: #EFF6FF;
+}}
+
+QCheckBox {{
+    color: #334155;
+    font-size: 9.5pt;
+    spacing: 6px;
+}}
+
+/* Áreas con scroll: fondo transparente (evita fondos negros en Windows modo oscuro) */
+QScrollArea {{
+    background: transparent;
+    border: none;
+}}
+
+QScrollArea > QWidget#qt_scrollarea_viewport, QWidget#scrollContent {{
+    background: transparent;
+}}
+
+QToolTip {{
+    background-color: #0F172A;
+    color: #F8FAFC;
+    border: none;
+    padding: 6px 8px;
+    font-size: 9pt;
+}}
+
 /* Barra de estado */
 QStatusBar {{
     background-color: {PANEL};

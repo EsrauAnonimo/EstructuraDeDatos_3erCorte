@@ -8,6 +8,7 @@ import sys
 
 # IMPORTANTE: QtWebEngineWidgets debe importarse antes de instanciar QApplication
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from graph import Graph
@@ -17,6 +18,9 @@ from gui import MainWindow
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    # La app está diseñada en tema claro: no heredar el modo oscuro de Windows (Qt >= 6.8)
+    if hasattr(app.styleHints(), "setColorScheme"):
+        app.styleHints().setColorScheme(Qt.ColorScheme.Light)
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     data_path = os.path.join(base_dir, "graph_data.json")

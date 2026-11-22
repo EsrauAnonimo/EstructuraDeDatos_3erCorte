@@ -5,6 +5,7 @@ Description: Main GUI window with QTabWidget for the PERA application.
 
 import os
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -22,6 +23,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
     QStatusBar,
@@ -36,6 +38,23 @@ from graph import Graph, save_graph
 import graph_view
 import styles
 from dashboard import DashboardWidget
+from widgets import RouteResultCard, format_cop, format_hours, format_km
+
+# Criterios disponibles y su explicación para el usuario
+CRITERIA_HINTS = {
+    "Distancia": "Busca el camino con menos kilómetros.",
+    "Tiempo": "Busca el camino que llega más rápido.",
+    "Peajes": "Busca el camino que gasta menos en peajes.",
+    "Combustible": "Busca el camino que gasta menos gasolina.",
+    "Combinada": "Equilibra distancia, tiempo, peajes y combustible (25 % cada uno).",
+}
+
+WEIGHT_MAP = {
+    "Distancia": "distance_km",
+    "Tiempo": "time_hours",
+    "Peajes": "toll_cost_cop",
+    "Combustible": "fuel_cost_cop",
+}
 
 
 # ==============================================================================
@@ -229,9 +248,10 @@ class MainWindow(QMainWindow):
         self.current_path = []
         self.current_origin = None
         self.current_dest = None
+        self._route_shown = False  # si hay una ruta en pantalla se recalcula al cambiar parámetros
 
         self.setWindowTitle("PERA — Planificador Eficiente de Rutas Automotrices")
-        self.resize(1200, 800)
+        self.resize(1280, 820)
         self.setMinimumSize(950, 650)
         self.setStyleSheet(styles.APP_QSS)
 
@@ -301,84 +321,129 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         routes_layout.addWidget(splitter)
 
-        # Panel izquierdo (35%)
+        # Panel izquierdo con scroll: parámetros + resultado
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setMinimumWidth(360)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         left_panel = QWidget()
+        left_panel.setObjectName("scrollContent")
         left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setContentsMargins(0, 0, 6, 0)
         left_layout.setSpacing(12)
 
         config_box = QGroupBox("Parámetros del Viaje")
         config_layout = QVBoxLayout(config_box)
-        config_layout.setSpacing(10)
+        config_layout.setSpacing(6)
 
-        config_layout.addWidget(QLabel("Ciudad de Origen:"))
+        config_layout.addWidget(self._field_label("🟢 Origen"))
         self.combo_origin = QComboBox()
+        self.combo_origin.setToolTip("Ciudad donde empieza el viaje")
         config_layout.addWidget(self.combo_origin)
 
-        config_layout.addWidget(QLabel("Ciudad de Destino:"))
+        self.btn_swap = QPushButton("⇅  Intercambiar origen y destino")
+        self.btn_swap.setObjectName("btnSwap")
+        self.btn_swap.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_swap.clicked.connect(self._swap_cities)
+        config_layout.addWidget(self.btn_swap)
+
+        config_layout.addWidget(self._field_label("🔴 Destino"))
         self.combo_dest = QComboBox()
+        self.combo_dest.setToolTip("Ciudad a la que quieres llegar")
         config_layout.addWidget(self.combo_dest)
 
-        config_layout.addWidget(QLabel("Criterio de Optimización:"))
+        config_layout.addSpacing(6)
+        config_layout.addWidget(self._field_label("🎯 ¿Qué quieres optimizar?"))
         self.combo_criterion = QComboBox()
-        self.combo_criterion.addItems(["Distancia", "Tiempo", "Peajes", "Combustible", "Combinada"])
+        self.combo_criterion.addItems(list(CRITERIA_HINTS))
         config_layout.addWidget(self.combo_criterion)
 
-        self.btn_calculate = QPushButton("Calcular ruta")
-        self.btn_calculate.clicked.connect(self._calculate_route)
-        config_layout.addWidget(self.btn_calculate)
+        self.lbl_criterion_hint = QLabel()
+        self.lbl_criterion_hint.setObjectName("hintLabel")
+        self.lbl_criterion_hint.setWordWrap(True)
+        config_layout.addWidget(self.lbl_criterion_hint)
 
+        config_layout.addSpacing(6)
+        btn_row = QHBoxLayout()
+        self.btn_calculate = QPushButton("Calcular ruta")
+        self.btn_calculate.setToolTip("Atajo: tecla Enter")
+        self.btn_calculate.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_calculate.clicked.connect(self._calculate_route)
+
+        self.btn_clear = QPushButton("Limpiar")
+        self.btn_clear.setObjectName("btnSecondary")
+        self.btn_clear.setToolTip("Quita la ruta del mapa")
+        self.btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_clear.clicked.connect(self._clear_route)
+
+        btn_row.addWidget(self.btn_calculate, stretch=2)
+        btn_row.addWidget(self.btn_clear, stretch=1)
+        config_layout.addLayout(btn_row)
         left_layout.addWidget(config_box)
 
-        # Tarjeta de resultados
+        # Tarjeta de resultados (vacío / error / resultado)
         self.result_box = QGroupBox("Resultado de la Ruta")
         res_layout = QVBoxLayout(self.result_box)
-        res_layout.setSpacing(8)
-
-        self.lbl_result_path = QLabel("Ruta: Seleccione origen y destino")
-        self.lbl_result_path.setWordWrap(True)
-        self.lbl_result_path.setStyleSheet("font-weight: 700; color: #1E293B; font-size: 10.5pt;")
-
-        self.lbl_result_dist = QLabel("Distancia: -")
-        self.lbl_result_time = QLabel("Tiempo: -")
-        self.lbl_result_toll = QLabel("Peajes: -")
-        self.lbl_result_fuel = QLabel("Combustible: -")
-        self.lbl_result_total_cost = QLabel("Costo total: -")
-        self.lbl_result_total_cost.setStyleSheet("font-weight: 700; color: #16A34A;")
-
-        self.lbl_result_error = QLabel("")
-        self.lbl_result_error.setStyleSheet("font-weight: 700; color: #DC2626; font-size: 10.5pt;")
-        self.lbl_result_error.setVisible(False)
-
-        res_layout.addWidget(self.lbl_result_path)
-        res_layout.addWidget(self.lbl_result_dist)
-        res_layout.addWidget(self.lbl_result_time)
-        res_layout.addWidget(self.lbl_result_toll)
-        res_layout.addWidget(self.lbl_result_fuel)
-        res_layout.addWidget(self.lbl_result_total_cost)
-        res_layout.addWidget(self.lbl_result_error)
-        res_layout.addStretch()
-
+        self.result_card = RouteResultCard()
+        res_layout.addWidget(self.result_card)
         left_layout.addWidget(self.result_box, stretch=1)
 
-        # Panel derecho (65%) - Visualizador de Grafo
+        left_scroll.setWidget(left_panel)
+
+        # Si ya hay una ruta en pantalla, cambiar un parámetro la recalcula al instante
+        self.combo_origin.currentIndexChanged.connect(self._on_params_changed)
+        self.combo_dest.currentIndexChanged.connect(self._on_params_changed)
+        self.combo_criterion.currentIndexChanged.connect(self._on_params_changed)
+        self._update_criterion_hint()
+
+        # Enter calcula la ruta mientras el foco esté en esta pestaña
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            shortcut = QShortcut(QKeySequence(key), self.tab_routes)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(self._calculate_route)
+
+        # Panel derecho: mapa interactivo
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
 
-        graph_box = QGroupBox("Visualización de la Red Vial (matplotlib)")
+        graph_box = QGroupBox("Mapa de la Red Vial")
         graph_box_layout = QVBoxLayout(graph_box)
+        graph_box_layout.setSpacing(6)
 
-        # Lienzo matplotlib embebido (reemplaza el QLabel + QPixmap de Graphviz)
         self.graph_canvas = graph_view.GraphCanvas(graph_box)
         self.graph_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        graph_box_layout.addWidget(self.graph_canvas)
+        self.graph_canvas.city_clicked.connect(self._on_graph_city_clicked)
+
+        toolbar = QHBoxLayout()
+        lbl_map_hint = QLabel(
+            "🖱️ Clic izquierdo: origen · Clic derecho: destino · "
+            "Pasa el mouse sobre una ciudad para ver sus datos"
+        )
+        lbl_map_hint.setObjectName("hintLabel")
+        self.chk_labels = QCheckBox("Mostrar distancias")
+        self.chk_labels.setChecked(True)
+        self.chk_labels.toggled.connect(self.graph_canvas.set_show_labels)
+        toolbar.addWidget(lbl_map_hint, stretch=1)
+        toolbar.addWidget(self.chk_labels)
+
+        graph_box_layout.addLayout(toolbar)
+        graph_box_layout.addWidget(self.graph_canvas, stretch=1)
         right_layout.addWidget(graph_box)
 
-        splitter.addWidget(left_panel)
+        splitter.addWidget(left_scroll)
         splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, 35)
-        splitter.setStretchFactor(1, 65)
+        splitter.setStretchFactor(0, 30)
+        splitter.setStretchFactor(1, 70)
+        splitter.setSizes([380, 900])
+
+    @staticmethod
+    def _field_label(text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("fieldLabel")
+        return label
 
     # --------------------------------------------------------------------------
     # PESTAÑA 2: GESTIÓN (CRUD Y PERSISTENCIA)
@@ -401,6 +466,17 @@ class MainWindow(QMainWindow):
         self.tbl_cities.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tbl_cities.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.tbl_cities.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tbl_cities.setAlternatingRowColors(True)
+        self.tbl_cities.verticalHeader().setVisible(False)
+        self.tbl_cities.setToolTip("Doble clic para editar")
+        self.tbl_cities.doubleClicked.connect(self._handle_modify_city)
+        self.tbl_cities.itemSelectionChanged.connect(self._update_toggle_button)
+
+        self.txt_search_cities = QLineEdit()
+        self.txt_search_cities.setPlaceholderText("🔍 Buscar ciudad por ID o nombre...")
+        self.txt_search_cities.setClearButtonEnabled(True)
+        self.txt_search_cities.textChanged.connect(lambda: self._filter_table(self.tbl_cities, self.txt_search_cities))
+        cities_layout.addWidget(self.txt_search_cities)
         cities_layout.addWidget(self.tbl_cities)
 
         btn_row_c = QHBoxLayout()
@@ -411,7 +487,7 @@ class MainWindow(QMainWindow):
         self.btn_mod_city.setObjectName("btnSecondary")
         self.btn_mod_city.clicked.connect(self._handle_modify_city)
 
-        self.btn_toggle_city = QPushButton("Desactivar/Activar")
+        self.btn_toggle_city = QPushButton("Activar / Desactivar")
         self.btn_toggle_city.setObjectName("btnWarning")
         self.btn_toggle_city.clicked.connect(self._handle_toggle_city)
 
@@ -437,6 +513,16 @@ class MainWindow(QMainWindow):
         self.tbl_edges.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tbl_edges.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.tbl_edges.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tbl_edges.setAlternatingRowColors(True)
+        self.tbl_edges.verticalHeader().setVisible(False)
+        self.tbl_edges.setToolTip("Doble clic para editar")
+        self.tbl_edges.doubleClicked.connect(self._handle_modify_edge)
+
+        self.txt_search_edges = QLineEdit()
+        self.txt_search_edges.setPlaceholderText("🔍 Buscar ruta, p. ej. BOG o MDE...")
+        self.txt_search_edges.setClearButtonEnabled(True)
+        self.txt_search_edges.textChanged.connect(lambda: self._filter_table(self.tbl_edges, self.txt_search_edges))
+        edges_layout.addWidget(self.txt_search_edges)
         edges_layout.addWidget(self.tbl_edges)
 
         btn_row_e = QHBoxLayout()
@@ -485,8 +571,10 @@ class MainWindow(QMainWindow):
             self.tbl_cities.setItem(row, 1, QTableWidgetItem(c["name"]))
             self.tbl_cities.setItem(row, 2, QTableWidgetItem(f"{c['lat']:.4f}"))
             self.tbl_cities.setItem(row, 3, QTableWidgetItem(f"{c['lon']:.4f}"))
-            self.tbl_cities.setItem(row, 4, QTableWidgetItem(f"${c['fuel_price_cop']:,.2f}".replace(",", ".")))
-            self.tbl_cities.setItem(row, 5, QTableWidgetItem("Sí" if is_active else "No"))
+            self.tbl_cities.setItem(row, 4, QTableWidgetItem(format_cop(c["fuel_price_cop"])))
+            status_item = QTableWidgetItem("● Activa" if is_active else "○ Inactiva")
+            status_item.setForeground(QColor(styles.SUCCESS if is_active else styles.MUTED))
+            self.tbl_cities.setItem(row, 5, status_item)
 
         # Poblar aristas
         edges = sorted(self.graph.get_edges(), key=lambda e: (e["from"], e["to"]))
@@ -495,9 +583,35 @@ class MainWindow(QMainWindow):
             self.tbl_edges.setItem(row, 0, QTableWidgetItem(e["from"]))
             self.tbl_edges.setItem(row, 1, QTableWidgetItem(e["to"]))
             self.tbl_edges.setItem(row, 2, QTableWidgetItem(f"{e['distance_km']:.1f} km"))
-            self.tbl_edges.setItem(row, 3, QTableWidgetItem(f"{e['time_hours']:.2f} h"))
-            self.tbl_edges.setItem(row, 4, QTableWidgetItem(f"${e['toll_cost_cop']:,.0f}".replace(",", ".")))
-            self.tbl_edges.setItem(row, 5, QTableWidgetItem(f"${e['fuel_cost_cop']:,.0f}".replace(",", ".")))
+            self.tbl_edges.setItem(row, 3, QTableWidgetItem(format_hours(e["time_hours"])))
+            self.tbl_edges.setItem(row, 4, QTableWidgetItem(format_cop(e["toll_cost_cop"])))
+            self.tbl_edges.setItem(row, 5, QTableWidgetItem(format_cop(e["fuel_cost_cop"])))
+
+        # Mantener el filtro de búsqueda activo tras recargar
+        self._filter_table(self.tbl_cities, self.txt_search_cities)
+        self._filter_table(self.tbl_edges, self.txt_search_edges)
+        self._update_toggle_button()
+
+    @staticmethod
+    def _filter_table(table: QTableWidget, search: QLineEdit):
+        """Oculta las filas que no contienen el texto buscado en ninguna columna."""
+        text = search.text().strip().lower()
+        for row in range(table.rowCount()):
+            visible = not text or any(
+                table.item(row, col) and text in table.item(row, col).text().lower()
+                for col in range(table.columnCount())
+            )
+            table.setRowHidden(row, not visible)
+
+    def _update_toggle_button(self):
+        """El botón dice 'Activar' o 'Desactivar' según la ciudad seleccionada."""
+        row = self.tbl_cities.currentRow()
+        if row < 0 or not self.tbl_cities.item(row, 0):
+            self.btn_toggle_city.setText("Activar / Desactivar")
+            return
+        cid = self.tbl_cities.item(row, 0).text()
+        active = self.graph.cities.get(cid, {}).get("active", True)
+        self.btn_toggle_city.setText("Desactivar" if active else "Activar")
 
     def _sync_and_save(self, operation_msg: str):
         """Guarda persistencia en JSON, refresca interfaces y verifica conectividad."""
@@ -671,103 +785,128 @@ class MainWindow(QMainWindow):
     # MÉTODOS DE SOPORTE Y ACCIONES DE RUTAS
     # --------------------------------------------------------------------------
     def _load_cities_into_combos(self):
-        """Llena los combos de origen y destino con las ciudades registradas."""
+        """Llena los combos de origen y destino. Las ciudades inactivas aparecen deshabilitadas."""
         current_o = self.combo_origin.currentData()
         current_d = self.combo_dest.currentData()
 
-        self.combo_origin.clear()
-        self.combo_dest.clear()
+        # Se bloquean señales para no disparar recálculos mientras se rellenan
+        for combo in (self.combo_origin, self.combo_dest):
+            combo.blockSignals(True)
+            combo.clear()
 
         cities = sorted(self.graph.get_cities(), key=lambda c: c["name"])
         for city in cities:
-            status = "" if city.get("active", True) else " (Inactiva)"
-            item_text = f"{city['id']} - {city['name']}{status}"
-            self.combo_origin.addItem(item_text, city["id"])
-            self.combo_dest.addItem(item_text, city["id"])
+            active = city.get("active", True)
+            item_text = f"{city['id']} - {city['name']}" + ("" if active else " (inactiva)")
+            for combo in (self.combo_origin, self.combo_dest):
+                combo.addItem(item_text, city["id"])
+                if not active:
+                    combo.model().item(combo.count() - 1).setEnabled(False)
 
-        if current_o and self.combo_origin.findData(current_o) >= 0:
-            self.combo_origin.setCurrentIndex(self.combo_origin.findData(current_o))
-        else:
-            idx_bog = self.combo_origin.findData("BOG")
-            if idx_bog >= 0:
-                self.combo_origin.setCurrentIndex(idx_bog)
+        for combo, current, default in (
+            (self.combo_origin, current_o, "BOG"),
+            (self.combo_dest, current_d, "CTG"),
+        ):
+            idx = combo.findData(current) if current else -1
+            if idx < 0:
+                idx = combo.findData(default)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            combo.blockSignals(False)
 
-        if current_d and self.combo_dest.findData(current_d) >= 0:
-            self.combo_dest.setCurrentIndex(self.combo_dest.findData(current_d))
-        else:
-            idx_ctg = self.combo_dest.findData("CTG")
-            if idx_ctg >= 0:
-                self.combo_dest.setCurrentIndex(idx_ctg)
+    def _update_criterion_hint(self):
+        self.lbl_criterion_hint.setText(CRITERIA_HINTS.get(self.combo_criterion.currentText(), ""))
+
+    def _on_params_changed(self):
+        """Cambió origen, destino o criterio."""
+        self._update_criterion_hint()
+        if self._route_shown:
+            self._calculate_route()
+
+    def _swap_cities(self):
+        """Intercambia origen y destino."""
+        idx_o = self.combo_origin.currentIndex()
+        idx_d = self.combo_dest.currentIndex()
+        for combo, idx in ((self.combo_origin, idx_d), (self.combo_dest, idx_o)):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(idx)
+            combo.blockSignals(False)
+        self._on_params_changed()
+
+    def _on_graph_city_clicked(self, city_id: str, button: int):
+        """Clic en el mapa: izquierdo = origen, derecho = destino. Calcula la ruta."""
+        city = self.graph.cities.get(city_id)
+        if not city:
+            return
+        if not city.get("active", True):
+            self.status_bar.showMessage(f"{city['name']} está inactiva y no se puede usar en una ruta.", 4000)
+            return
+
+        is_origin = button == 1
+        combo = self.combo_origin if is_origin else self.combo_dest
+        combo.blockSignals(True)
+        combo.setCurrentIndex(combo.findData(city_id))
+        combo.blockSignals(False)
+        self.status_bar.showMessage(f"{city['name']} seleccionada como {'origen' if is_origin else 'destino'}.", 3000)
+        self._calculate_route()
+
+    def _clear_route(self):
+        """Quita la ruta del mapa y vuelve al estado inicial del panel."""
+        self._route_shown = False
+        self.current_path = []
+        self.current_origin = None
+        self.current_dest = None
+        self.result_card.show_empty()
+        self._refresh_graph_display()
+        self.dashboard_widget.set_current_path([])
+        self.status_bar.showMessage("Ruta limpiada.", 3000)
 
     def _calculate_route(self):
-        """Ejecuta el algoritmo de Dijkstra según los parámetros seleccionados."""
+        """Ejecuta Dijkstra con los parámetros seleccionados y muestra el resultado."""
         origin = self.combo_origin.currentData()
         dest = self.combo_dest.currentData()
         criterion_text = self.combo_criterion.currentText()
-
         if not origin or not dest:
             return
 
-        if origin == dest:
-            self.lbl_result_error.setText("El origen y el destino deben ser ciudades diferentes.")
-            self.lbl_result_error.setVisible(True)
-            self.lbl_result_path.setText("Ruta: Inválida")
-            self.lbl_result_dist.setText("Distancia: -")
-            self.lbl_result_time.setText("Tiempo: -")
-            self.lbl_result_toll.setText("Peajes: -")
-            self.lbl_result_fuel.setText("Combustible: -")
-            self.lbl_result_total_cost.setText("Costo total: -")
-            self.current_path = []
-            self._refresh_graph_display()
-            return
-
-        weight_map = {
-            "Distancia": "distance_km",
-            "Tiempo": "time_hours",
-            "Peajes": "toll_cost_cop",
-            "Combustible": "fuel_cost_cop"
-        }
-
-        if criterion_text == "Combinada":
-            res = self.graph.shortest_path_combined(origin, dest)
-        else:
-            weight = weight_map.get(criterion_text, "distance_km")
-            res = self.graph.shortest_path(origin, dest, weight)
-
+        self._route_shown = True
         self.current_origin = origin
         self.current_dest = dest
+        self.current_path = []
 
-        if res is None:
-            self.lbl_result_error.setText("Ruta no encontrada")
-            self.lbl_result_error.setVisible(True)
-            self.lbl_result_path.setText("Ruta: No existe camino disponible")
-            self.lbl_result_dist.setText("Distancia: -")
-            self.lbl_result_time.setText("Tiempo: -")
-            self.lbl_result_toll.setText("Peajes: -")
-            self.lbl_result_fuel.setText("Combustible: -")
-            self.lbl_result_total_cost.setText("Costo total: -")
-            self.current_path = []
-            self.status_bar.showMessage(f"No se encontró ruta entre {origin} y {dest}.", 5000)
+        res = None
+        error = None
+        inactive = [c for c in (origin, dest) if not self.graph.cities.get(c, {}).get("active", True)]
+        if origin == dest:
+            error = "El origen y el destino deben ser ciudades diferentes."
+        elif inactive:
+            error = (f"La ciudad {', '.join(inactive)} está inactiva. "
+                     "Actívala en la pestaña Gestión o elige otra.")
         else:
-            self.lbl_result_error.setVisible(False)
+            if criterion_text == "Combinada":
+                res = self.graph.shortest_path_combined(origin, dest)
+            else:
+                res = self.graph.shortest_path(origin, dest, WEIGHT_MAP.get(criterion_text, "distance_km"))
+            if res is None:
+                error = f"No existe un camino disponible entre {origin} y {dest}."
+
+        if error:
+            self.result_card.show_error(error)
+            self.status_bar.showMessage(error, 5000)
+        else:
             path = res.get("path", [])
             self.current_path = path
+            legs = [self.graph.adj[path[i]][path[i + 1]] for i in range(len(path) - 1)]
+            names = {cid: c["name"] for cid, c in self.graph.cities.items()}
+            self.result_card.show_result(res, legs, criterion_text, names)
 
-            path_str = " → ".join(path)
-            dist = res.get("total_distance_km", 0.0)
-            t_hours = res.get("total_time_hours", 0.0)
-            toll = res.get("total_toll_cop", 0.0)
-            fuel = res.get("total_fuel_cop", 0.0)
-            total_money = toll + fuel
-
-            self.lbl_result_path.setText(f"Ruta: {path_str}")
-            self.lbl_result_dist.setText(f"Distancia: {dist:.1f} km")
-            self.lbl_result_time.setText(f"Tiempo: {t_hours:.2f} h")
-            self.lbl_result_toll.setText(f"Peajes: ${toll:,.0f}".replace(",", "."))
-            self.lbl_result_fuel.setText(f"Combustible: ${fuel:,.0f}".replace(",", "."))
-            self.lbl_result_total_cost.setText(f"Costo total: ${total_money:,.0f} (peajes + combustible)".replace(",", "."))
-
-            self.status_bar.showMessage(f"Ruta óptima calculada ({criterion_text}): {path_str} | Costo total: ${total_money:,.0f}".replace(",", "."), 6000)
+            total_money = res.get("total_toll_cop", 0.0) + res.get("total_fuel_cop", 0.0)
+            self.status_bar.showMessage(
+                f"Ruta óptima ({criterion_text}): {' → '.join(path)} · "
+                f"{format_km(res.get('total_distance_km', 0.0))} · "
+                f"{format_hours(res.get('total_time_hours', 0.0))} · {format_cop(total_money)}",
+                6000,
+            )
 
         self._refresh_graph_display()
         # Solo se informa la ruta; el mapa se regenera al abrir el Dashboard si cambió
