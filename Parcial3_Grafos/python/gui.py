@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 from graph import Graph, save_graph
 import graph_view
 import styles
+from dashboard import DashboardWidget
 
 
 # ==============================================================================
@@ -242,6 +243,8 @@ class MainWindow(QMainWindow):
         self._load_cities_into_combos()
         self._populate_management_tables()
         self._refresh_graph_display()
+        if hasattr(self, "dashboard_widget"):
+            self.dashboard_widget.refresh_dashboard(self.current_path)
 
     def _init_ui(self):
         """Inicializa la disposición de la interfaz y pestañas."""
@@ -288,7 +291,8 @@ class MainWindow(QMainWindow):
 
         self._build_routes_tab()
         self._build_management_tab()
-        self._build_dashboard_tab_placeholder()
+        self._build_dashboard_tab()
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
     # --------------------------------------------------------------------------
     # PESTAÑA 1: RUTAS
@@ -466,12 +470,18 @@ class MainWindow(QMainWindow):
         mgmt_layout.addWidget(cities_box, stretch=1)
         mgmt_layout.addWidget(edges_box, stretch=1)
 
-    def _build_dashboard_tab_placeholder(self):
-        """Espacio reservado para la pestaña de Dashboard."""
+    def _build_dashboard_tab(self):
+        """Construye la pestaña del Dashboard analítico y mapa interactivo."""
         layout = QVBoxLayout(self.tab_dashboard)
-        lbl = QLabel("Pestaña de Dashboard en preparación.")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(lbl)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.dashboard_widget = DashboardWidget(self.graph, self)
+        layout.addWidget(self.dashboard_widget)
+
+    def _on_tab_changed(self, index: int):
+        """Se activa al cambiar de pestaña para refrescar datos según corresponda."""
+        tab_name = self.tabs.tabText(index)
+        if "Dashboard" in tab_name and hasattr(self, "dashboard_widget"):
+            self.dashboard_widget.refresh_dashboard(self.current_path)
 
     # --------------------------------------------------------------------------
     # POBLACIÓN Y GESTIÓN DE TABLAS
@@ -507,6 +517,8 @@ class MainWindow(QMainWindow):
         self._populate_management_tables()
         self._load_cities_into_combos()
         self._refresh_graph_display()
+        if hasattr(self, "dashboard_widget"):
+            self.dashboard_widget.refresh_dashboard(self.current_path)
 
         status = f"{operation_msg} | Guardado en {os.path.basename(self.data_filepath)}" if saved else f"{operation_msg} (Error al guardar)"
         self.status_bar.showMessage(status, 5000)
@@ -770,6 +782,8 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"Ruta óptima calculada ({criterion_text}): {path_str} | Costo total: ${total_money:,.0f}".replace(",", "."), 6000)
 
         self._refresh_graph_display()
+        if hasattr(self, "dashboard_widget"):
+            self.dashboard_widget.refresh_dashboard(self.current_path)
 
     def _refresh_graph_display(self):
         """Renderiza el grafo y lo proyecta sobre el QLabel correspondiente."""

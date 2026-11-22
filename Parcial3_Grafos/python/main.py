@@ -6,6 +6,8 @@ Description: Main entry point for the PERA PyQt6 application.
 import os
 import sys
 
+# IMPORTANTE: QtWebEngineWidgets debe importarse antes de instanciar QApplication
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from graph import Graph
