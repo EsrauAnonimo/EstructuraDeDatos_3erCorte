@@ -37,6 +37,10 @@ class DashboardWidget(QWidget):
         super().__init__(parent)
         self.graph = graph
         self.current_path = []
+        # Flags dirty: qué partes del dashboard deben recalcularse en el próximo refresco
+        self._stats_dirty = True
+        self._map_dirty = True
+        self._map_path = os.path.join(tempfile.gettempdir(), "pera_network_map.html")
 
         self._init_ui()
 
@@ -127,21 +131,41 @@ class DashboardWidget(QWidget):
 
         scroll.setWidget(container)
         root_layout.addWidget(scroll)
-
-        self.refresh_dashboard()
+        # No se calcula nada aquí: se hace al abrir la pestaña (refresh_if_needed)
 
     def set_current_path(self, path: list[str]):
-        """Actualiza la ruta resaltada calculada previamente."""
-        self.current_path = path or []
+        """Guarda la ruta calculada. El mapa solo se marca sucio si la ruta cambió."""
+        new_path = list(path or [])
+        if new_path != self.current_path:
+            self.current_path = new_path
+            self._map_dirty = True
+            if self.isVisible():
+                self.refresh_if_needed()
+
+    def mark_graph_dirty(self):
+        """El grafo cambió (CRUD): estadísticas, gráficos y mapa deben recalcularse."""
+        self._stats_dirty = True
+        self._map_dirty = True
+        if self.isVisible():
+            self.refresh_if_needed()
+
+    def refresh_if_needed(self):
+        """Recalcula solo las partes marcadas como sucias."""
+        if self._stats_dirty:
+            self._update_statistics_table()
+            self._update_charts()
+            self._stats_dirty = False
+        if self._map_dirty:
+            self._update_folium_map()
+            self._map_dirty = False
 
     def refresh_dashboard(self, path: list[str] = None):
-        """Recalcula y redibuja estadísticas, gráficos y mapa."""
+        """Fuerza el recálculo completo (estadísticas, gráficos y mapa)."""
         if path is not None:
-            self.current_path = path
-
-        self._update_statistics_table()
-        self._update_charts()
-        self._update_folium_map()
+            self.current_path = list(path)
+        self._stats_dirty = True
+        self._map_dirty = True
+        self.refresh_if_needed()
 
     # --------------------------------------------------------------------------
     # CÁLCULO DE ESTADÍSTICAS
@@ -343,6 +367,5 @@ class DashboardWidget(QWidget):
                 ).add_to(colombia_map)
 
         # Guardar en archivo temporal y cargar en QWebEngineView
-        temp_map_path = os.path.join(tempfile.gettempdir(), "pera_network_map.html")
-        colombia_map.save(temp_map_path)
-        self.web_view.load(QUrl.fromLocalFile(temp_map_path))
+        colombia_map.save(self._map_path)
+        self.web_view.load(QUrl.fromLocalFile(self._map_path))
