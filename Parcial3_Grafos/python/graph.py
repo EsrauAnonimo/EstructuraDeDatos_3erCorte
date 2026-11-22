@@ -42,7 +42,8 @@ class Graph:
                     name=city["name"],
                     lat=city["lat"],
                     lon=city["lon"],
-                    fuel_price_cop=city["fuel_price_cop"]
+                    fuel_price_cop=city["fuel_price_cop"],
+                    active=city.get("active", True)
                 )
 
             for edge in data.get("edges", []):
@@ -60,7 +61,7 @@ class Graph:
         except Exception:
             return False
 
-    def add_city(self, city_id: str, name: str, lat: float, lon: float, fuel_price_cop: float) -> bool:
+    def add_city(self, city_id: str, name: str, lat: float, lon: float, fuel_price_cop: float, active: bool = True) -> bool:
         """Agrega o actualiza una ciudad en el grafo."""
         self.cities[city_id] = {
             "id": city_id,
@@ -68,11 +69,27 @@ class Graph:
             "lat": lat,
             "lon": lon,
             "fuel_price_cop": fuel_price_cop,
-            "active": True
+            "active": active
         }
         if city_id not in self.adj:
             self.adj[city_id] = {}
         return True
+
+    def remove_city(self, city_id: str) -> bool:
+        """Elimina una ciudad y todas sus aristas conectadas."""
+        if city_id not in self.cities:
+            return False
+        del self.cities[city_id]
+        if city_id in self.adj:
+            del self.adj[city_id]
+        for u in list(self.adj.keys()):
+            if city_id in self.adj[u]:
+                del self.adj[u][city_id]
+        return True
+
+    def save_to_json(self, filepath: str) -> bool:
+        """Guarda el grafo en un archivo JSON."""
+        return save_graph(self, filepath)
 
     def add_edge(self, from_id: str, to_id: str, distance_km: float, time_hours: float,
                  toll_cost_cop: float, fuel_cost_cop: float = None) -> bool:
@@ -355,6 +372,70 @@ class Graph:
                     heapq.heappush(pq, (new_cost, nxt, path + [nxt]))
 
         return None
+
+
+def save_graph(graph: Graph, filepath: str) -> bool:
+    """
+    Serializa el grafo a formato JSON con la misma estructura requerida,
+    incluyendo metadatos, precio de combustible y respaldo .bak previo.
+    """
+    import datetime
+    import shutil
+
+    resolved_path = filepath
+    if not os.path.isabs(resolved_path) and not os.path.exists(resolved_path):
+        candidate = os.path.join(os.path.dirname(__file__), filepath)
+        if os.path.exists(os.path.dirname(candidate)):
+            resolved_path = candidate
+
+    try:
+        if os.path.exists(resolved_path):
+            backup_path = resolved_path + ".bak"
+            shutil.copyfile(resolved_path, backup_path)
+
+        cities_data = []
+        for city in graph.get_cities():
+            cities_data.append({
+                "id": city["id"],
+                "name": city["name"],
+                "lat": city["lat"],
+                "lon": city["lon"],
+                "fuel_price_cop": city["fuel_price_cop"],
+                "active": city.get("active", True)
+            })
+
+        edges_data = []
+        for edge in graph.get_edges():
+            edges_data.append({
+                "from": edge["from"],
+                "to": edge["to"],
+                "distance_km": edge["distance_km"],
+                "time_hours": edge["time_hours"],
+                "toll_cost_cop": edge["toll_cost_cop"],
+                "fuel_cost_cop": edge["fuel_cost_cop"]
+            })
+
+        payload = {
+            "_meta": {
+                "description": "Rutas terrestres entre 12 capitales de Colombia - PERA Parcial 3",
+                "saved_at": datetime.datetime.now().isoformat(),
+                "directed": graph.directed,
+                "graphs": ["distance", "toll", "fuel"],
+                "assumptions": {
+                    "km_per_gallon": 35,
+                    "fuel_price_source": "CREG nov 2026, gasolina corriente por ciudad"
+                }
+            },
+            "cities": cities_data,
+            "edges": edges_data
+        }
+
+        with open(resolved_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+        return True
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

@@ -1,28 +1,16 @@
 {
   "_meta": {
     "description": "Rutas terrestres entre 12 capitales de Colombia - PERA Parcial 3",
-    "generated": "2026-11-21",
+    "saved_at": "2026-11-21T23:39:27.361022",
     "directed": true,
     "graphs": [
       "distance",
       "toll",
       "fuel"
     ],
-    "sources": {
-      "distance_time": "Google Maps (consulta 21 nov 2026, auto, hora valle)",
-      "toll": "colombiapeajes.com 2026 / calculador de peajes / suma de peajes individuales",
-      "fuel_price": "CREG Circular 339 de 2026 (vigencia 29 ago 2026)",
-      "coordinates": "OpenStreetMap / Wikipedia"
-    },
     "assumptions": {
       "km_per_gallon": 35,
       "fuel_price_source": "CREG nov 2026, gasolina corriente por ciudad"
-    },
-    "notes": {
-      "MDE-MZL": "Peaje inferido: MDE-PEI (36305) + PEI-MZL (21300) = 57605",
-      "CTG-SMR": "Peaje inferido: CTG-BAQ (0) + BAQ-SMR (14600) = 14600",
-      "BOG-VVC": "Peaje suma 4 peajes: Boqueron I (20800) + Boqueron II (20800) + Naranjal (17800) + Pipiral (29100) = 88500",
-      "BOG-BAQ": "Tiempo Google Maps 17h23m (trafico real con cierre deportivo); distancia 1001 km"
     }
   },
   "cities": [
@@ -31,390 +19,402 @@
       "name": "Bogotá",
       "lat": 4.711,
       "lon": -74.0721,
-      "fuel_price_cop": 16331
+      "fuel_price_cop": 16331,
+      "active": true
     },
     {
       "id": "MDE",
       "name": "Medellín",
       "lat": 6.2442,
       "lon": -75.5812,
-      "fuel_price_cop": 16251
+      "fuel_price_cop": 16251,
+      "active": true
     },
     {
       "id": "CAL",
       "name": "Cali",
       "lat": 3.4516,
       "lon": -76.532,
-      "fuel_price_cop": 16339
+      "fuel_price_cop": 16339,
+      "active": true
     },
     {
       "id": "BAQ",
       "name": "Barranquilla",
       "lat": 10.9685,
       "lon": -74.7813,
-      "fuel_price_cop": 15964
+      "fuel_price_cop": 15964,
+      "active": true
     },
     {
       "id": "CTG",
       "name": "Cartagena",
       "lat": 10.391,
       "lon": -75.4794,
-      "fuel_price_cop": 15921
+      "fuel_price_cop": 15921,
+      "active": true
     },
     {
       "id": "BGA",
       "name": "Bucaramanga",
       "lat": 7.1254,
       "lon": -73.1198,
-      "fuel_price_cop": 16089
+      "fuel_price_cop": 16089,
+      "active": true
     },
     {
       "id": "CUC",
       "name": "Cúcuta",
       "lat": 7.8891,
       "lon": -72.4967,
-      "fuel_price_cop": 14281
+      "fuel_price_cop": 14281,
+      "active": true
     },
     {
       "id": "PEI",
       "name": "Pereira",
       "lat": 4.8133,
       "lon": -75.6961,
-      "fuel_price_cop": 16276
+      "fuel_price_cop": 16276,
+      "active": true
     },
     {
       "id": "MZL",
       "name": "Manizales",
       "lat": 5.0703,
       "lon": -75.5138,
-      "fuel_price_cop": 16304
+      "fuel_price_cop": 16304,
+      "active": true
     },
     {
       "id": "SMR",
       "name": "Santa Marta",
       "lat": 11.2404,
       "lon": -74.199,
-      "fuel_price_cop": 16064
+      "fuel_price_cop": 16064,
+      "active": true
     },
     {
       "id": "IBE",
       "name": "Ibagué",
       "lat": 4.4389,
       "lon": -75.2322,
-      "fuel_price_cop": 16245
+      "fuel_price_cop": 16245,
+      "active": true
     },
     {
       "id": "VVC",
       "name": "Villavicencio",
       "lat": 4.142,
       "lon": -73.6266,
-      "fuel_price_cop": 16431
+      "fuel_price_cop": 16431,
+      "active": true
     }
   ],
   "edges": [
     {
       "from": "BOG",
       "to": "MDE",
-      "distance_km": 417,
+      "distance_km": 417.0,
       "time_hours": 9.23,
-      "toll_cost_cop": 68108,
+      "toll_cost_cop": 68108.0,
       "fuel_cost_cop": 194572.2
-    },
-    {
-      "from": "MDE",
-      "to": "BOG",
-      "distance_km": 417,
-      "time_hours": 9.23,
-      "toll_cost_cop": 68108,
-      "fuel_cost_cop": 193619.06
     },
     {
       "from": "BOG",
       "to": "CAL",
-      "distance_km": 458,
+      "distance_km": 458.0,
       "time_hours": 9.88,
-      "toll_cost_cop": 126000,
+      "toll_cost_cop": 126000.0,
       "fuel_cost_cop": 213702.8
-    },
-    {
-      "from": "CAL",
-      "to": "BOG",
-      "distance_km": 458,
-      "time_hours": 9.88,
-      "toll_cost_cop": 126000,
-      "fuel_cost_cop": 213807.49
     },
     {
       "from": "BOG",
       "to": "BAQ",
-      "distance_km": 1001,
+      "distance_km": 1001.0,
       "time_hours": 17.38,
-      "toll_cost_cop": 175200,
+      "toll_cost_cop": 175200.0,
       "fuel_cost_cop": 467066.6
-    },
-    {
-      "from": "BAQ",
-      "to": "BOG",
-      "distance_km": 1001,
-      "time_hours": 17.38,
-      "toll_cost_cop": 175200,
-      "fuel_cost_cop": 456570.4
     },
     {
       "from": "BOG",
       "to": "BGA",
-      "distance_km": 426,
+      "distance_km": 426.0,
       "time_hours": 9.17,
-      "toll_cost_cop": 19700,
+      "toll_cost_cop": 19700.0,
       "fuel_cost_cop": 198771.6
-    },
-    {
-      "from": "BGA",
-      "to": "BOG",
-      "distance_km": 426,
-      "time_hours": 9.17,
-      "toll_cost_cop": 19700,
-      "fuel_cost_cop": 195826.11
     },
     {
       "from": "BOG",
       "to": "VVC",
-      "distance_km": 124,
+      "distance_km": 124.0,
       "time_hours": 3.88,
-      "toll_cost_cop": 88500,
+      "toll_cost_cop": 88500.0,
       "fuel_cost_cop": 57858.4
-    },
-    {
-      "from": "VVC",
-      "to": "BOG",
-      "distance_km": 124,
-      "time_hours": 3.88,
-      "toll_cost_cop": 88500,
-      "fuel_cost_cop": 58212.69
     },
     {
       "from": "BOG",
       "to": "IBE",
-      "distance_km": 202,
+      "distance_km": 202.0,
       "time_hours": 4.55,
-      "toll_cost_cop": 53100,
+      "toll_cost_cop": 53100.0,
       "fuel_cost_cop": 94253.2
     },
     {
-      "from": "IBE",
+      "from": "MDE",
       "to": "BOG",
-      "distance_km": 202,
-      "time_hours": 4.55,
-      "toll_cost_cop": 53100,
-      "fuel_cost_cop": 93756.86
+      "distance_km": 417.0,
+      "time_hours": 9.23,
+      "toll_cost_cop": 68108.0,
+      "fuel_cost_cop": 193619.06
     },
     {
       "from": "MDE",
       "to": "CTG",
-      "distance_km": 702,
+      "distance_km": 702.0,
       "time_hours": 11.9,
-      "toll_cost_cop": 96700,
+      "toll_cost_cop": 96700.0,
       "fuel_cost_cop": 325948.63
-    },
-    {
-      "from": "CTG",
-      "to": "MDE",
-      "distance_km": 702,
-      "time_hours": 11.9,
-      "toll_cost_cop": 96700,
-      "fuel_cost_cop": 319329.77
     },
     {
       "from": "MDE",
       "to": "PEI",
-      "distance_km": 238,
+      "distance_km": 238.0,
       "time_hours": 4.68,
-      "toll_cost_cop": 36305,
+      "toll_cost_cop": 36305.0,
       "fuel_cost_cop": 110506.8
-    },
-    {
-      "from": "PEI",
-      "to": "MDE",
-      "distance_km": 238,
-      "time_hours": 4.68,
-      "toll_cost_cop": 36305,
-      "fuel_cost_cop": 110676.8
     },
     {
       "from": "MDE",
       "to": "MZL",
-      "distance_km": 221,
+      "distance_km": 221.0,
       "time_hours": 4.32,
-      "toll_cost_cop": 57605,
+      "toll_cost_cop": 57605.0,
       "fuel_cost_cop": 102613.46
     },
     {
-      "from": "MZL",
-      "to": "MDE",
-      "distance_km": 221,
-      "time_hours": 4.32,
-      "toll_cost_cop": 57605,
-      "fuel_cost_cop": 102948.11
+      "from": "CAL",
+      "to": "BOG",
+      "distance_km": 458.0,
+      "time_hours": 9.88,
+      "toll_cost_cop": 126000.0,
+      "fuel_cost_cop": 213807.49
     },
     {
       "from": "CAL",
       "to": "PEI",
-      "distance_km": 211,
+      "distance_km": 211.0,
       "time_hours": 3.63,
-      "toll_cost_cop": 62800,
+      "toll_cost_cop": 62800.0,
       "fuel_cost_cop": 98500.83
-    },
-    {
-      "from": "PEI",
-      "to": "CAL",
-      "distance_km": 211,
-      "time_hours": 3.63,
-      "toll_cost_cop": 62800,
-      "fuel_cost_cop": 98121.03
     },
     {
       "from": "CAL",
       "to": "IBE",
-      "distance_km": 253,
+      "distance_km": 253.0,
       "time_hours": 5.53,
-      "toll_cost_cop": 64700,
+      "toll_cost_cop": 64700.0,
       "fuel_cost_cop": 118107.63
     },
     {
-      "from": "IBE",
-      "to": "CAL",
-      "distance_km": 253,
-      "time_hours": 5.53,
-      "toll_cost_cop": 64700,
-      "fuel_cost_cop": 117428.14
+      "from": "BAQ",
+      "to": "BOG",
+      "distance_km": 1001.0,
+      "time_hours": 17.38,
+      "toll_cost_cop": 175200.0,
+      "fuel_cost_cop": 456570.4
     },
     {
       "from": "BAQ",
       "to": "CTG",
-      "distance_km": 134,
+      "distance_km": 134.0,
       "time_hours": 2.4,
-      "toll_cost_cop": 0,
+      "toll_cost_cop": 0.0,
       "fuel_cost_cop": 61119.31
     },
     {
-      "from": "CTG",
-      "to": "BAQ",
-      "distance_km": 134,
-      "time_hours": 2.4,
-      "toll_cost_cop": 0,
-      "fuel_cost_cop": 60954.69
-    },
-    {
       "from": "BAQ",
       "to": "SMR",
-      "distance_km": 108,
+      "distance_km": 108.0,
       "time_hours": 2.33,
-      "toll_cost_cop": 14600,
+      "toll_cost_cop": 14600.0,
       "fuel_cost_cop": 49260.34
     },
     {
-      "from": "SMR",
+      "from": "CTG",
+      "to": "MDE",
+      "distance_km": 702.0,
+      "time_hours": 11.9,
+      "toll_cost_cop": 96700.0,
+      "fuel_cost_cop": 319329.77
+    },
+    {
+      "from": "CTG",
       "to": "BAQ",
-      "distance_km": 108,
-      "time_hours": 2.33,
-      "toll_cost_cop": 14600,
-      "fuel_cost_cop": 49568.91
+      "distance_km": 134.0,
+      "time_hours": 2.4,
+      "toll_cost_cop": 0.0,
+      "fuel_cost_cop": 60954.69
     },
     {
       "from": "CTG",
       "to": "SMR",
-      "distance_km": 236,
+      "distance_km": 236.0,
       "time_hours": 4.53,
-      "toll_cost_cop": 14600,
+      "toll_cost_cop": 14600.0,
       "fuel_cost_cop": 107353.03
     },
     {
-      "from": "SMR",
-      "to": "CTG",
-      "distance_km": 236,
-      "time_hours": 4.53,
-      "toll_cost_cop": 14600,
-      "fuel_cost_cop": 108317.26
+      "from": "BGA",
+      "to": "BOG",
+      "distance_km": 426.0,
+      "time_hours": 9.17,
+      "toll_cost_cop": 19700.0,
+      "fuel_cost_cop": 195826.11
     },
     {
       "from": "BGA",
       "to": "CUC",
-      "distance_km": 199,
+      "distance_km": 199.0,
       "time_hours": 4.98,
-      "toll_cost_cop": 20800,
+      "toll_cost_cop": 20800.0,
       "fuel_cost_cop": 91477.46
-    },
-    {
-      "from": "CUC",
-      "to": "BGA",
-      "distance_km": 199,
-      "time_hours": 4.98,
-      "toll_cost_cop": 20800,
-      "fuel_cost_cop": 81197.69
     },
     {
       "from": "BGA",
       "to": "MZL",
-      "distance_km": 509,
+      "distance_km": 509.0,
       "time_hours": 10.2,
-      "toll_cost_cop": 47900,
+      "toll_cost_cop": 47900.0,
       "fuel_cost_cop": 233980.03
     },
     {
-      "from": "MZL",
+      "from": "CUC",
       "to": "BGA",
-      "distance_km": 509,
-      "time_hours": 10.2,
-      "toll_cost_cop": 47900,
-      "fuel_cost_cop": 237106.74
+      "distance_km": 199.0,
+      "time_hours": 4.98,
+      "toll_cost_cop": 20800.0,
+      "fuel_cost_cop": 81197.69
     },
     {
       "from": "CUC",
       "to": "SMR",
-      "distance_km": 630,
+      "distance_km": 630.0,
       "time_hours": 13.63,
-      "toll_cost_cop": 41100,
+      "toll_cost_cop": 41100.0,
       "fuel_cost_cop": 257058.0
     },
     {
-      "from": "SMR",
-      "to": "CUC",
-      "distance_km": 630,
-      "time_hours": 13.63,
-      "toll_cost_cop": 41100,
-      "fuel_cost_cop": 289152.0
+      "from": "PEI",
+      "to": "MDE",
+      "distance_km": 238.0,
+      "time_hours": 4.68,
+      "toll_cost_cop": 36305.0,
+      "fuel_cost_cop": 110676.8
+    },
+    {
+      "from": "PEI",
+      "to": "CAL",
+      "distance_km": 211.0,
+      "time_hours": 3.63,
+      "toll_cost_cop": 62800.0,
+      "fuel_cost_cop": 98121.03
     },
     {
       "from": "PEI",
       "to": "MZL",
-      "distance_km": 52,
+      "distance_km": 52.0,
       "time_hours": 1.38,
-      "toll_cost_cop": 21300,
+      "toll_cost_cop": 21300.0,
       "fuel_cost_cop": 24181.49
     },
     {
       "from": "MZL",
+      "to": "MDE",
+      "distance_km": 221.0,
+      "time_hours": 4.32,
+      "toll_cost_cop": 57605.0,
+      "fuel_cost_cop": 102948.11
+    },
+    {
+      "from": "MZL",
+      "to": "BGA",
+      "distance_km": 509.0,
+      "time_hours": 10.2,
+      "toll_cost_cop": 47900.0,
+      "fuel_cost_cop": 237106.74
+    },
+    {
+      "from": "MZL",
       "to": "PEI",
-      "distance_km": 52,
+      "distance_km": 52.0,
       "time_hours": 1.38,
-      "toll_cost_cop": 21300,
+      "toll_cost_cop": 21300.0,
       "fuel_cost_cop": 24223.09
     },
     {
-      "from": "VVC",
-      "to": "IBE",
-      "distance_km": 291,
-      "time_hours": 6.0,
-      "toll_cost_cop": 95200,
-      "fuel_cost_cop": 136612.03
+      "from": "SMR",
+      "to": "BAQ",
+      "distance_km": 108.0,
+      "time_hours": 2.33,
+      "toll_cost_cop": 14600.0,
+      "fuel_cost_cop": 49568.91
+    },
+    {
+      "from": "SMR",
+      "to": "CTG",
+      "distance_km": 236.0,
+      "time_hours": 4.53,
+      "toll_cost_cop": 14600.0,
+      "fuel_cost_cop": 108317.26
+    },
+    {
+      "from": "SMR",
+      "to": "CUC",
+      "distance_km": 630.0,
+      "time_hours": 13.63,
+      "toll_cost_cop": 41100.0,
+      "fuel_cost_cop": 289152.0
+    },
+    {
+      "from": "IBE",
+      "to": "BOG",
+      "distance_km": 202.0,
+      "time_hours": 4.55,
+      "toll_cost_cop": 53100.0,
+      "fuel_cost_cop": 93756.86
+    },
+    {
+      "from": "IBE",
+      "to": "CAL",
+      "distance_km": 253.0,
+      "time_hours": 5.53,
+      "toll_cost_cop": 64700.0,
+      "fuel_cost_cop": 117428.14
     },
     {
       "from": "IBE",
       "to": "VVC",
-      "distance_km": 291,
+      "distance_km": 291.0,
       "time_hours": 6.0,
-      "toll_cost_cop": 95200,
+      "toll_cost_cop": 95200.0,
       "fuel_cost_cop": 135065.57
+    },
+    {
+      "from": "VVC",
+      "to": "BOG",
+      "distance_km": 124.0,
+      "time_hours": 3.88,
+      "toll_cost_cop": 88500.0,
+      "fuel_cost_cop": 58212.69
+    },
+    {
+      "from": "VVC",
+      "to": "IBE",
+      "distance_km": 291.0,
+      "time_hours": 6.0,
+      "toll_cost_cop": 95200.0,
+      "fuel_cost_cop": 136612.03
     }
   ]
 }

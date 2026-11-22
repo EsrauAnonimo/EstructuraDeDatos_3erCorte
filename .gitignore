@@ -6,3 +6,4 @@ __pycache__/
 *.log
 Taller3_AVL/python/data.json
 Taller3_AVL/python/data.json.bak
+*.bak
