@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSplitter,
     QStatusBar,
@@ -227,7 +226,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.graph = graph
         self.data_filepath = data_filepath
-        self.current_svg_path = None
         self.current_path = []
         self.current_origin = None
         self.current_dest = None
@@ -237,14 +235,11 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(950, 650)
         self.setStyleSheet(styles.APP_QSS)
 
-        graph_view.cleanup_temp_files()
-
         self._init_ui()
         self._load_cities_into_combos()
         self._populate_management_tables()
         self._refresh_graph_display()
-        if hasattr(self, "dashboard_widget"):
-            self.dashboard_widget.refresh_dashboard(self.current_path)
+        # El dashboard se calcula de forma perezosa al abrir su pestaña
 
     def _init_ui(self):
         """Inicializa la disposición de la interfaz y pestañas."""
@@ -371,19 +366,13 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
 
-        graph_box = QGroupBox("Visualización de la Red Vial (Graphviz)")
+        graph_box = QGroupBox("Visualización de la Red Vial (matplotlib)")
         graph_box_layout = QVBoxLayout(graph_box)
 
-        self.scroll_graph = QScrollArea()
-        self.scroll_graph.setWidgetResizable(True)
-        self.scroll_graph.setStyleSheet("background-color: #FAFCFF; border: 1px solid #E2E8F0; border-radius: 8px;")
-
-        self.lbl_graph = QLabel("Cargando grafo...")
-        self.lbl_graph.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_graph.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.scroll_graph.setWidget(self.lbl_graph)
-
-        graph_box_layout.addWidget(self.scroll_graph)
+        # Lienzo matplotlib embebido (reemplaza el QLabel + QPixmap de Graphviz)
+        self.graph_canvas = graph_view.GraphCanvas(graph_box)
+        self.graph_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        graph_box_layout.addWidget(self.graph_canvas)
         right_layout.addWidget(graph_box)
 
         splitter.addWidget(left_panel)
@@ -478,10 +467,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.dashboard_widget)
 
     def _on_tab_changed(self, index: int):
-        """Se activa al cambiar de pestaña para refrescar datos según corresponda."""
-        tab_name = self.tabs.tabText(index)
-        if "Dashboard" in tab_name and hasattr(self, "dashboard_widget"):
-            self.dashboard_widget.refresh_dashboard(self.current_path)
+        """Al abrir el Dashboard solo se recalcula lo marcado como sucio (dirty)."""
+        if self.tabs.widget(index) is self.tab_dashboard:
+            self.dashboard_widget.refresh_if_needed()
 
     # --------------------------------------------------------------------------
     # POBLACIÓN Y GESTIÓN DE TABLAS
@@ -517,8 +505,8 @@ class MainWindow(QMainWindow):
         self._populate_management_tables()
         self._load_cities_into_combos()
         self._refresh_graph_display()
-        if hasattr(self, "dashboard_widget"):
-            self.dashboard_widget.refresh_dashboard(self.current_path)
+        # El grafo cambió: estadísticas, gráficos y mapa quedan pendientes de recalcular
+        self.dashboard_widget.mark_graph_dirty()
 
         status = f"{operation_msg} | Guardado en {os.path.basename(self.data_filepath)}" if saved else f"{operation_msg} (Error al guardar)"
         self.status_bar.showMessage(status, 5000)
@@ -782,33 +770,14 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"Ruta óptima calculada ({criterion_text}): {path_str} | Costo total: ${total_money:,.0f}".replace(",", "."), 6000)
 
         self._refresh_graph_display()
-        if hasattr(self, "dashboard_widget"):
-            self.dashboard_widget.refresh_dashboard(self.current_path)
+        # Solo se informa la ruta; el mapa se regenera al abrir el Dashboard si cambió
+        self.dashboard_widget.set_current_path(self.current_path)
 
     def _refresh_graph_display(self):
-        """Renderiza el grafo y lo proyecta sobre el QLabel correspondiente."""
-        svg_path = graph_view.render_graph(
+        """Actualiza el lienzo; internamente solo redibuja si el grafo o la ruta cambiaron."""
+        self.graph_canvas.update_view(
             self.graph,
             path=self.current_path,
             origin=self.current_origin,
             destination=self.current_dest
         )
-        self.current_svg_path = svg_path
-        self._update_pixmap()
-
-    def _update_pixmap(self):
-        """Actualiza el mapa de bits con las dimensiones del contenedor."""
-        if not self.current_svg_path or not os.path.exists(self.current_svg_path):
-            self.lbl_graph.setText("No hay visualización disponible.")
-            return
-
-        w = max(self.scroll_graph.viewport().width(), 500)
-        h = max(self.scroll_graph.viewport().height(), 400)
-        pix = graph_view.render_to_pixmap(self.current_svg_path, w, h)
-        if not pix.isNull():
-            self.lbl_graph.setPixmap(pix)
-
-    def resizeEvent(self, event):
-        """Ajusta el renderizado al redimensionar la ventana."""
-        super().resizeEvent(event)
-        self._update_pixmap()

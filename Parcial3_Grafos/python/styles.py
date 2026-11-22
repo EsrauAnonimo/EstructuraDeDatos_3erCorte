@@ -24,7 +24,7 @@ MUTED = "#64748B"
 BORDER = "#E2E8F0"
 INPUT_BG = "#FFFFFF"
 
-# Colores para el grafo Graphviz
+# Colores para el grafo (matplotlib)
 NODE_CITY_FILL = "#DBEAFE"
 NODE_CITY_BORDER = "#2563EB"
 
