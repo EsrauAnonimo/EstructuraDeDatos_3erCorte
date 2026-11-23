@@ -1,7 +1,7 @@
 """
 Module: dashboard.py
-Description: Analytics dashboard with descriptive statistics, matplotlib charts,
-             and an interactive Folium map embedded in QWebEngineView for PERA.
+Description: Road-network analytics dashboard: KPIs, descriptive statistics,
+             matplotlib charts and an interactive Folium map (QWebEngineView).
 """
 
 import os
@@ -11,12 +11,12 @@ import tempfile
 import folium
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import (
-    QFrame,
+    QAbstractItemView,
     QGridLayout,
-    QGroupBox,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QScrollArea,
@@ -27,11 +27,31 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import styles
 from graph import Graph
+from widgets import KpiCard, card, format_km, section_label
+
+
+def _clean_fmt(template: str, value: float) -> str:
+    return template.format(value).replace(",", ".")
+
+
+def _style_axes(ax, title: str, xlabel: str = "", ylabel: str = ""):
+    """Estilo común de los gráficos: sin bordes superiores, rejilla suave y título a la izquierda."""
+    ax.set_title(title, loc="left", fontsize=10, fontweight="semibold", color=styles.TEXT, pad=10)
+    ax.set_xlabel(xlabel, fontsize=8.5, color=styles.MUTED)
+    ax.set_ylabel(ylabel, fontsize=8.5, color=styles.MUTED)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(styles.BORDER)
+    ax.tick_params(colors=styles.MUTED, labelsize=7.5, length=0, pad=4)
+    ax.grid(axis="y", color="#EEF2F7", linewidth=1)
+    ax.set_axisbelow(True)
 
 
 class DashboardWidget(QWidget):
-    """Widget de Dashboard que integra estadísticas, gráficos matplotlib y mapa Folium."""
+    """Dashboard de análisis de la red vial (estadísticas, gráficos y mapa Folium)."""
 
     def __init__(self, graph: Graph, parent=None):
         super().__init__(parent)
@@ -45,95 +65,110 @@ class DashboardWidget(QWidget):
         self._init_ui()
 
     def _init_ui(self):
-        root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 0, 0)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        # ScrollArea vertical para contener todas las secciones
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         container = QWidget()
         container.setObjectName("scrollContent")
-        self.layout_container = QVBoxLayout(container)
-        self.layout_container.setContentsMargins(14, 14, 14, 14)
-        self.layout_container.setSpacing(18)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(20, 18, 20, 20)
+        layout.setSpacing(16)
 
-        # ----------------------------------------------------------------------
-        # SECCIÓN 1: ESTADÍSTICAS DESCRIPTIVAS
-        # ----------------------------------------------------------------------
-        stats_box = QGroupBox("Estadísticas Descriptivas de la Red (38 Aristas Dirigidas)")
-        stats_layout = QVBoxLayout(stats_box)
-        stats_layout.setContentsMargins(12, 16, 12, 12)
+        # --- Encabezado de página
+        title = QLabel("Análisis de la red vial")
+        title.setObjectName("pageTitle")
+        subtitle = QLabel("Indicadores calculados a partir de las ciudades y conexiones registradas.")
+        subtitle.setObjectName("pageSubtitle")
+        head = QVBoxLayout()
+        head.setSpacing(2)
+        head.addWidget(title)
+        head.addWidget(subtitle)
+        layout.addLayout(head)
+
+        # --- KPIs
+        kpis = QHBoxLayout()
+        kpis.setSpacing(14)
+        self.kpi_cities = KpiCard("pin", "Ciudades")
+        self.kpi_edges = KpiCard("link", "Conexiones dirigidas")
+        self.kpi_length = KpiCard("globe", "Longitud de la red")
+        self.kpi_routes = KpiCard("route", "Rutas calculadas")
+        self.kpi_routes.set_data("0", "en esta sesión")
+        for kpi in (self.kpi_cities, self.kpi_edges, self.kpi_length, self.kpi_routes):
+            kpis.addWidget(kpi, stretch=1)
+        layout.addLayout(kpis)
+
+        # --- Gráficos (2x2)
+        charts_card = card()
+        charts = QGridLayout(charts_card)
+        charts.setContentsMargins(16, 14, 16, 16)
+        charts.setHorizontalSpacing(18)
+        charts.setVerticalSpacing(12)
+        charts.addWidget(section_label("Análisis gráfico multicriterio"), 0, 0, 1, 2)
+
+        self.fig_hist, self.canvas_hist = self._make_chart()
+        self.fig_tolls, self.canvas_tolls = self._make_chart()
+        self.fig_fuel, self.canvas_fuel = self._make_chart()
+        self.fig_scatter, self.canvas_scatter = self._make_chart()
+        charts.addWidget(self.canvas_hist, 1, 0)
+        charts.addWidget(self.canvas_tolls, 1, 1)
+        charts.addWidget(self.canvas_fuel, 2, 0)
+        charts.addWidget(self.canvas_scatter, 2, 1)
+        layout.addWidget(charts_card)
+
+        # --- Estadísticas descriptivas
+        stats_card = card()
+        stats_layout = QVBoxLayout(stats_card)
+        stats_layout.setContentsMargins(16, 14, 16, 12)
+        stats_layout.setSpacing(8)
+        self.lbl_stats_title = section_label("Estadísticas descriptivas")
+        stats_layout.addWidget(self.lbl_stats_title)
 
         self.tbl_stats = QTableWidget()
         self.tbl_stats.setColumnCount(6)
-        self.tbl_stats.setHorizontalHeaderLabels([
-            "Criterio", "Media", "Mediana", "Máx", "Mín", "Desv. Est."
-        ])
+        self.tbl_stats.setHorizontalHeaderLabels(["CRITERIO", "MEDIA", "MEDIANA", "MÁX", "MÍN", "DESV. EST."])
         self.tbl_stats.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tbl_stats.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.tbl_stats.verticalHeader().setVisible(False)
-        self.tbl_stats.setFixedHeight(170)
-        self.tbl_stats.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.tbl_stats.verticalHeader().setDefaultSectionSize(34)
+        self.tbl_stats.setShowGrid(False)
+        self.tbl_stats.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tbl_stats.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.tbl_stats.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tbl_stats.setFixedHeight(4 * 34 + 36)
+        self.tbl_stats.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         stats_layout.addWidget(self.tbl_stats)
+        layout.addWidget(stats_card)
 
-        self.layout_container.addWidget(stats_box)
-
-        # ----------------------------------------------------------------------
-        # SECCIÓN 2: GRÁFICOS MATPLOTLIB (GRID 2x2)
-        # ----------------------------------------------------------------------
-        charts_box = QGroupBox("Análisis Gráfico Multicriterio")
-        charts_grid = QGridLayout(charts_box)
-        charts_grid.setContentsMargins(12, 16, 12, 12)
-        charts_grid.setSpacing(14)
-
-        # Figura 1: Histograma de distancias
-        self.fig_hist = Figure(figsize=(5, 3.4), dpi=90, facecolor="#FFFFFF")
-        self.canvas_hist = FigureCanvas(self.fig_hist)
-        self.canvas_hist.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.canvas_hist.setMinimumHeight(280)
-        charts_grid.addWidget(self.canvas_hist, 0, 0)
-
-        # Figura 2: Barras de peajes por ruta (19 pares ordenados)
-        self.fig_tolls = Figure(figsize=(5, 3.4), dpi=90, facecolor="#FFFFFF")
-        self.canvas_tolls = FigureCanvas(self.fig_tolls)
-        self.canvas_tolls.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.canvas_tolls.setMinimumHeight(280)
-        charts_grid.addWidget(self.canvas_tolls, 0, 1)
-
-        # Figura 3: Barras de combustible por ruta (19 pares ordenados)
-        self.fig_fuel = Figure(figsize=(5, 3.4), dpi=90, facecolor="#FFFFFF")
-        self.canvas_fuel = FigureCanvas(self.fig_fuel)
-        self.canvas_fuel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.canvas_fuel.setMinimumHeight(280)
-        charts_grid.addWidget(self.canvas_fuel, 1, 0)
-
-        # Figura 4: Relación Tiempo vs Distancia
-        self.fig_scatter = Figure(figsize=(5, 3.4), dpi=90, facecolor="#FFFFFF")
-        self.canvas_scatter = FigureCanvas(self.fig_scatter)
-        self.canvas_scatter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.canvas_scatter.setMinimumHeight(280)
-        charts_grid.addWidget(self.canvas_scatter, 1, 1)
-
-        self.layout_container.addWidget(charts_box)
-
-        # ----------------------------------------------------------------------
-        # SECCIÓN 3: MAPA INTERACTIVO FOLIUM (QWebEngineView)
-        # ----------------------------------------------------------------------
-        map_box = QGroupBox("Mapa Geográfico Interactivo de la Red Vial (Folium)")
-        map_layout = QVBoxLayout(map_box)
-        map_layout.setContentsMargins(12, 16, 12, 12)
-
+        # --- Mapa Folium
+        map_card = card()
+        map_layout = QVBoxLayout(map_card)
+        map_layout.setContentsMargins(16, 14, 16, 16)
+        map_layout.setSpacing(10)
+        map_layout.addWidget(section_label("Mapa geográfico interactivo"))
         self.web_view = QWebEngineView()
-        self.web_view.setMinimumHeight(480)
+        self.web_view.setMinimumHeight(460)
         map_layout.addWidget(self.web_view)
-
-        self.layout_container.addWidget(map_box)
+        layout.addWidget(map_card)
 
         scroll.setWidget(container)
-        root_layout.addWidget(scroll)
+        root.addWidget(scroll)
         # No se calcula nada aquí: se hace al abrir la pestaña (refresh_if_needed)
 
+    @staticmethod
+    def _make_chart():
+        fig = Figure(figsize=(5, 3.2), dpi=90, facecolor=styles.SURFACE)
+        canvas = FigureCanvas(fig)
+        canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        canvas.setMinimumHeight(270)
+        return fig, canvas
+
+    # --------------------------------------------------------------------------
+    # CONTROL DE REFRESCO (flags dirty)
+    # --------------------------------------------------------------------------
     def set_current_path(self, path: list[str]):
         """Guarda la ruta calculada. El mapa solo se marca sucio si la ruta cambió."""
         new_path = list(path or [])
@@ -142,6 +177,10 @@ class DashboardWidget(QWidget):
             self._map_dirty = True
             if self.isVisible():
                 self.refresh_if_needed()
+
+    def set_routes_count(self, count: int):
+        """Actualiza el contador de rutas calculadas (no recalcula nada más)."""
+        self.kpi_routes.set_data(str(count), "en esta sesión")
 
     def mark_graph_dirty(self):
         """El grafo cambió (CRUD): estadísticas, gráficos y mapa deben recalcularse."""
@@ -153,6 +192,7 @@ class DashboardWidget(QWidget):
     def refresh_if_needed(self):
         """Recalcula solo las partes marcadas como sucias."""
         if self._stats_dirty:
+            self._update_kpis()
             self._update_statistics_table()
             self._update_charts()
             self._stats_dirty = False
@@ -169,10 +209,50 @@ class DashboardWidget(QWidget):
         self.refresh_if_needed()
 
     # --------------------------------------------------------------------------
+    # DATOS
+    # --------------------------------------------------------------------------
+    def _route_pairs(self, edges: list[dict]) -> list[dict]:
+        """Agrupa las aristas dirigidas en pares de ciudades (tramos)."""
+        route_pairs = {}
+        for e in edges:
+            pair_key = tuple(sorted([e["from"], e["to"]]))
+            if pair_key not in route_pairs:
+                route_pairs[pair_key] = {
+                    "label": f"{pair_key[0]}-{pair_key[1]}",
+                    "toll": e["toll_cost_cop"],
+                    "fuel_sum": e["fuel_cost_cop"],
+                    "count": 1,
+                    "distance": e["distance_km"],
+                    "time": e["time_hours"],
+                }
+            else:
+                route_pairs[pair_key]["fuel_sum"] += e["fuel_cost_cop"]
+                route_pairs[pair_key]["count"] += 1
+        pairs = list(route_pairs.values())
+        for p in pairs:
+            p["avg_fuel"] = p["fuel_sum"] / max(p["count"], 1)
+        return pairs
+
+    def _update_kpis(self):
+        cities = self.graph.get_cities()
+        edges = self.graph.get_edges()
+        active = sum(1 for c in cities if c.get("active", True))
+        pairs = self._route_pairs(edges)
+        inactive = len(cities) - active
+
+        self.kpi_cities.set_data(
+            str(len(cities)),
+            f"{active} activas" + (f" · {inactive} inactiva{'s' if inactive != 1 else ''}" if inactive else ""),
+        )
+        self.kpi_edges.set_data(str(len(edges)), f"{len(pairs)} tramos entre ciudades")
+        self.kpi_length.set_data(format_km(sum(p["distance"] for p in pairs)), f"suma de los {len(pairs)} tramos")
+
+    # --------------------------------------------------------------------------
     # CÁLCULO DE ESTADÍSTICAS
     # --------------------------------------------------------------------------
     def _update_statistics_table(self):
         edges = self.graph.get_edges()
+        self.lbl_stats_title.setText(f"ESTADÍSTICAS DESCRIPTIVAS · {len(edges)} ARISTAS DIRIGIDAS")
         if not edges:
             self.tbl_stats.setRowCount(0)
             return
@@ -197,15 +277,16 @@ class DashboardWidget(QWidget):
             min_val = min(vals)
             std_val = statistics.stdev(vals) if len(vals) > 1 else 0.0
 
-            def clean_fmt(template, v):
-                return template.format(v).replace(",", ".")
-
-            self.tbl_stats.setItem(row, 0, QTableWidgetItem(label))
-            self.tbl_stats.setItem(row, 1, QTableWidgetItem(clean_fmt(fmt_avg, avg_val)))
-            self.tbl_stats.setItem(row, 2, QTableWidgetItem(clean_fmt(fmt_avg, med_val)))
-            self.tbl_stats.setItem(row, 3, QTableWidgetItem(clean_fmt(fmt_val, max_val)))
-            self.tbl_stats.setItem(row, 4, QTableWidgetItem(clean_fmt(fmt_val, min_val)))
-            self.tbl_stats.setItem(row, 5, QTableWidgetItem(clean_fmt(fmt_avg, std_val)))
+            label_item = QTableWidgetItem(label)
+            font = label_item.font()
+            font.setWeight(600)
+            label_item.setFont(font)
+            self.tbl_stats.setItem(row, 0, label_item)
+            self.tbl_stats.setItem(row, 1, QTableWidgetItem(_clean_fmt(fmt_avg, avg_val)))
+            self.tbl_stats.setItem(row, 2, QTableWidgetItem(_clean_fmt(fmt_avg, med_val)))
+            self.tbl_stats.setItem(row, 3, QTableWidgetItem(_clean_fmt(fmt_val, max_val)))
+            self.tbl_stats.setItem(row, 4, QTableWidgetItem(_clean_fmt(fmt_val, min_val)))
+            self.tbl_stats.setItem(row, 5, QTableWidgetItem(_clean_fmt(fmt_avg, std_val)))
 
     # --------------------------------------------------------------------------
     # RENDERIZADO DE GRÁFICOS MATPLOTLIB
@@ -214,86 +295,48 @@ class DashboardWidget(QWidget):
         edges = self.graph.get_edges()
         if not edges:
             return
+        pairs_list = self._route_pairs(edges)
+        n_pairs = len(pairs_list)
 
-        # 1. Histograma de Distancias
+        # 1. Histograma de distancias
         self.fig_hist.clear()
         ax1 = self.fig_hist.add_subplot(111)
         distances = [e["distance_km"] for e in edges]
-        ax1.hist(distances, bins=8, color="#2563EB", edgecolor="#1E293B", alpha=0.85, rwidth=0.88)
-        ax1.set_title("Distribución de Distancias de la Red", fontsize=10, fontweight="bold", color="#1E293B", pad=8)
-        ax1.set_xlabel("Distancia (km)", fontsize=8.5, color="#475569")
-        ax1.set_ylabel("Frecuencia (aristas)", fontsize=8.5, color="#475569")
-        ax1.grid(axis="y", linestyle="--", alpha=0.5)
-        ax1.tick_params(axis="both", labelsize=8)
+        ax1.hist(distances, bins=8, color=styles.PRIMARY, alpha=0.9, rwidth=0.86)
+        _style_axes(ax1, "Distribución de distancias de la red", "Distancia (km)", "Frecuencia (aristas)")
         self.fig_hist.tight_layout()
         self.canvas_hist.draw()
 
-        # Extraer los 19 pares base no dirigidos
-        route_pairs = {}
-        for e in edges:
-            u, v = e["from"], e["to"]
-            pair_key = tuple(sorted([u, v]))
-            if pair_key not in route_pairs:
-                route_pairs[pair_key] = {
-                    "label": f"{pair_key[0]}-{pair_key[1]}",
-                    "toll": e["toll_cost_cop"],
-                    "fuel_sum": e["fuel_cost_cop"],
-                    "count": 1,
-                    "distance": e["distance_km"],
-                    "time": e["time_hours"]
-                }
-            else:
-                route_pairs[pair_key]["fuel_sum"] += e["fuel_cost_cop"]
-                route_pairs[pair_key]["count"] += 1
-
-        pairs_list = list(route_pairs.values())
-        for p in pairs_list:
-            p["avg_fuel"] = p["fuel_sum"] / max(p["count"], 1)
-
-        # 2. Barras de Peajes (ordenadas de mayor a menor)
+        # 2. Peajes por tramo (de mayor a menor)
         self.fig_tolls.clear()
         ax2 = self.fig_tolls.add_subplot(111)
         pairs_by_toll = sorted(pairs_list, key=lambda x: x["toll"], reverse=True)
-        toll_labels = [p["label"] for p in pairs_by_toll]
-        toll_vals = [p["toll"] / 1000.0 for p in pairs_by_toll]  # Miles de COP
-
-        bars2 = ax2.bar(toll_labels, toll_vals, color="#16A34A", edgecolor="#15803D", alpha=0.88)
-        ax2.set_title("Costo de Peajes por Ruta (19 pares)", fontsize=10, fontweight="bold", color="#1E293B", pad=8)
-        ax2.set_ylabel("Peaje (Miles COP)", fontsize=8.5, color="#475569")
-        ax2.tick_params(axis="x", rotation=55, labelsize=7.5)
-        ax2.tick_params(axis="y", labelsize=8)
-        ax2.grid(axis="y", linestyle="--", alpha=0.5)
+        ax2.bar([p["label"] for p in pairs_by_toll], [p["toll"] / 1000.0 for p in pairs_by_toll],
+                color=styles.NAVY, width=0.68)
+        _style_axes(ax2, f"Costo de peajes por ruta ({n_pairs} pares)", ylabel="Peaje (miles COP)")
+        ax2.tick_params(axis="x", rotation=60, labelsize=7)
         self.fig_tolls.tight_layout()
         self.canvas_tolls.draw()
 
-        # 3. Barras de Combustible (ordenadas de mayor a menor)
+        # 3. Combustible promedio por tramo (de mayor a menor)
         self.fig_fuel.clear()
         ax3 = self.fig_fuel.add_subplot(111)
         pairs_by_fuel = sorted(pairs_list, key=lambda x: x["avg_fuel"], reverse=True)
-        fuel_labels = [p["label"] for p in pairs_by_fuel]
-        fuel_vals = [p["avg_fuel"] / 1000.0 for p in pairs_by_fuel]  # Miles de COP
-
-        ax3.bar(fuel_labels, fuel_vals, color="#D97706", edgecolor="#B45309", alpha=0.88)
-        ax3.set_title("Costo Promedio Combustible por Ruta (19 pares)", fontsize=10, fontweight="bold", color="#1E293B", pad=8)
-        ax3.set_ylabel("Combustible (Miles COP)", fontsize=8.5, color="#475569")
-        ax3.tick_params(axis="x", rotation=55, labelsize=7.5)
-        ax3.tick_params(axis="y", labelsize=8)
-        ax3.grid(axis="y", linestyle="--", alpha=0.5)
+        ax3.bar([p["label"] for p in pairs_by_fuel], [p["avg_fuel"] / 1000.0 for p in pairs_by_fuel],
+                color=styles.SECONDARY, width=0.68)
+        _style_axes(ax3, f"Costo promedio de combustible por ruta ({n_pairs} pares)",
+                    ylabel="Combustible (miles COP)")
+        ax3.tick_params(axis="x", rotation=60, labelsize=7)
         self.fig_fuel.tight_layout()
         self.canvas_fuel.draw()
 
-        # 4. Dispersión Tiempo vs Distancia
+        # 4. Dispersión tiempo vs distancia
         self.fig_scatter.clear()
         ax4 = self.fig_scatter.add_subplot(111)
-        scatter_dist = [e["distance_km"] for e in edges]
-        scatter_time = [e["time_hours"] for e in edges]
-
-        ax4.scatter(scatter_dist, scatter_time, color="#6366F1", edgecolors="#4338CA", alpha=0.85, s=40)
-        ax4.set_title("Relación Tiempo vs. Distancia", fontsize=10, fontweight="bold", color="#1E293B", pad=8)
-        ax4.set_xlabel("Distancia (km)", fontsize=8.5, color="#475569")
-        ax4.set_ylabel("Tiempo (horas)", fontsize=8.5, color="#475569")
-        ax4.grid(True, linestyle="--", alpha=0.5)
-        ax4.tick_params(axis="both", labelsize=8)
+        ax4.scatter([e["distance_km"] for e in edges], [e["time_hours"] for e in edges],
+                    color=styles.PRIMARY, edgecolors="#FFFFFF", linewidths=0.8, alpha=0.85, s=42)
+        _style_axes(ax4, "Relación tiempo vs. distancia", "Distancia (km)", "Tiempo (horas)")
+        ax4.grid(axis="x", color="#EEF2F7", linewidth=1)
         self.fig_scatter.tight_layout()
         self.canvas_scatter.draw()
 
@@ -306,32 +349,29 @@ class DashboardWidget(QWidget):
             return
 
         # Centro aproximado de Colombia
-        colombia_map = folium.Map(
-            location=[6.0, -74.5],
-            zoom_start=6,
-            tiles="OpenStreetMap"
-        )
+        colombia_map = folium.Map(location=[6.0, -74.5], zoom_start=6, tiles="OpenStreetMap")
 
         # Marcadores para cada ciudad
         for cid, city in cities.items():
             active = city.get("active", True)
-            marker_color = "blue" if active else "gray"
-            icon_name = "info-sign" if active else "remove-sign"
-
             popup_html = (
                 f"<b>{city['name']} ({cid})</b><br>"
                 f"Estado: {'Activa' if active else 'Inactiva'}<br>"
                 f"Gasolina: ${city['fuel_price_cop']:,.2f} COP".replace(",", ".")
             )
-
-            folium.Marker(
+            folium.CircleMarker(
                 location=[city["lat"], city["lon"]],
+                radius=7,
+                color="#FFFFFF" if active else styles.SUBTLE,
+                weight=2,
+                fill=True,
+                fill_color=styles.MAP_NODE_BORDER if active else styles.MAP_NODE_INACTIVE_FILL,
+                fill_opacity=1.0,
                 popup=folium.Popup(popup_html, max_width=250),
                 tooltip=f"{cid} - {city['name']}",
-                icon=folium.Icon(color=marker_color, icon=icon_name)
             ).add_to(colombia_map)
 
-        # Aristas como PolyLines grises (unificando pares)
+        # Aristas como líneas grises (unificando pares)
         drawn_pairs = set()
         for edge in self.graph.get_edges():
             u, v = edge["from"], edge["to"]
@@ -339,32 +379,25 @@ class DashboardWidget(QWidget):
                 pair = tuple(sorted([u, v]))
                 if pair not in drawn_pairs:
                     drawn_pairs.add(pair)
-                    locs = [
-                        [cities[u]["lat"], cities[u]["lon"]],
-                        [cities[v]["lat"], cities[v]["lon"]]
-                    ]
-                    tooltip_text = f"{u} ↔ {v} ({edge['distance_km']:.0f} km)"
                     folium.PolyLine(
-                        locations=locs,
+                        locations=[[cities[u]["lat"], cities[u]["lon"]], [cities[v]["lat"], cities[v]["lon"]]],
                         color="#64748B",
-                        weight=2.5,
-                        opacity=0.6,
-                        tooltip=tooltip_text
+                        weight=2,
+                        opacity=0.55,
+                        tooltip=f"{u} ↔ {v} ({edge['distance_km']:.0f} km)",
                     ).add_to(colombia_map)
 
-        # Si hay una ruta calculada previamente, resaltarla en rojo
+        # Si hay una ruta calculada, resaltarla
         if self.current_path and len(self.current_path) >= 2:
-            path_coords = []
-            for cid in self.current_path:
-                if cid in cities:
-                    path_coords.append([cities[cid]["lat"], cities[cid]["lon"]])
+            path_coords = [[cities[c]["lat"], cities[c]["lon"]] for c in self.current_path if c in cities]
             if len(path_coords) >= 2:
+                folium.PolyLine(locations=path_coords, color="#FFFFFF", weight=9, opacity=0.9).add_to(colombia_map)
                 folium.PolyLine(
                     locations=path_coords,
-                    color="#DC2626",
-                    weight=5.5,
-                    opacity=0.9,
-                    tooltip=f"Ruta óptima: {' → '.join(self.current_path)}"
+                    color=styles.PRIMARY,
+                    weight=5,
+                    opacity=0.95,
+                    tooltip=f"Ruta óptima: {' → '.join(self.current_path)}",
                 ).add_to(colombia_map)
 
         # Guardar en archivo temporal y cargar en QWebEngineView
