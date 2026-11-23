@@ -6,8 +6,10 @@ Description: Main entry point for the PERA PyQt6 application.
 import os
 import sys
 
+# Compatibilidad OpenGL en Windows para evitar que Chromium deje el mapa en blanco.
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu --no-sandbox --disable-software-rasterizer"
+
 # IMPORTANTE: QtWebEngineWidgets debe importarse antes de instanciar QApplication
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 

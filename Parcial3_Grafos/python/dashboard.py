@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -61,6 +62,7 @@ class DashboardWidget(QWidget):
         self._stats_dirty = True
         self._map_dirty = True
         self._map_path = os.path.join(tempfile.gettempdir(), "pera_network_map.html")
+        self._map_fallback = None
 
         self._init_ui()
 
@@ -150,8 +152,11 @@ class DashboardWidget(QWidget):
         map_layout.setSpacing(10)
         map_layout.addWidget(section_label("Mapa geográfico interactivo"))
         self.web_view = QWebEngineView()
-        self.web_view.setMinimumHeight(460)
+        self.web_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.web_view.setMinimumHeight(400)
+        self.web_view.loadFinished.connect(self._on_map_loaded)
         map_layout.addWidget(self.web_view)
+        self._map_layout = map_layout
         layout.addWidget(map_card)
 
         scroll.setWidget(container)
@@ -402,4 +407,22 @@ class DashboardWidget(QWidget):
 
         # Guardar en archivo temporal y cargar en QWebEngineView
         colombia_map.save(self._map_path)
-        self.web_view.load(QUrl.fromLocalFile(self._map_path))
+        html_path = os.path.abspath(self._map_path)
+        if os.path.exists(html_path):
+            self.web_view.load(QUrl.fromLocalFile(html_path))
+
+    def _on_map_loaded(self, ok: bool):
+        """Registra la carga y muestra HTML básico si QtWebEngine falla."""
+        print(f"[PERA] Mapa Folium cargado: {ok}")
+        if ok or self._map_fallback is not None:
+            return
+        warning = QLabel("No se pudo cargar el mapa. Verifica que PyQt6-WebEngine esté instalado.")
+        warning.setWordWrap(True)
+        self._map_fallback = QTextBrowser()
+        self._map_fallback.setOpenExternalLinks(True)
+        self._map_fallback.setMinimumHeight(400)
+        self._map_fallback.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._map_layout.insertWidget(1, warning)
+        self._map_fallback.setHtml(f"<h3>Mapa de rutas PERA</h3><p>{warning.text()}</p><p>El archivo Folium fue generado en: {self._map_path}</p>")
+        self._map_layout.replaceWidget(self.web_view, self._map_fallback)
+        self.web_view.hide()
