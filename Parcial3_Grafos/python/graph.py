@@ -40,6 +40,7 @@ class Graph:
                 self.add_city(
                     city_id=city["id"],
                     name=city["name"],
+                    department=city.get("department", "N/A"),
                     lat=city["lat"],
                     lon=city["lon"],
                     fuel_price_cop=city["fuel_price_cop"],
@@ -55,17 +56,24 @@ class Graph:
                     distance_km=edge["distance_km"],
                     time_hours=edge["time_hours"],
                     toll_cost_cop=edge["toll_cost_cop"],
-                    fuel_cost_cop=edge.get("fuel_cost_cop")
+                    fuel_cost_cop=edge.get("fuel_cost_cop"),
+                    active=edge.get("active", True),
+                    category=edge.get("category", "Primaria"),
+                    validated=edge.get("validated", True),
+                    source=edge.get("source", "Google Maps"),
+                    researcher=edge.get("researcher", "Grupo UPC")
                 )
             return True
         except Exception:
             return False
 
-    def add_city(self, city_id: str, name: str, lat: float, lon: float, fuel_price_cop: float, active: bool = True) -> bool:
+    def add_city(self, city_id: str, name: str, lat: float, lon: float, fuel_price_cop: float,
+                 active: bool = True, department: str = "N/A") -> bool:
         """Agrega o actualiza una ciudad en el grafo."""
         self.cities[city_id] = {
             "id": city_id,
             "name": name,
+            "department": department,
             "lat": lat,
             "lon": lon,
             "fuel_price_cop": fuel_price_cop,
@@ -92,7 +100,9 @@ class Graph:
         return save_graph(self, filepath)
 
     def add_edge(self, from_id: str, to_id: str, distance_km: float, time_hours: float,
-                 toll_cost_cop: float, fuel_cost_cop: float = None) -> bool:
+                 toll_cost_cop: float, fuel_cost_cop: float = None, active: bool = True,
+                 category: str = "Primaria", validated: bool = True,
+                 source: str = "Google Maps", researcher: str = "Grupo UPC") -> bool:
         """Agrega una arista dirigida entre dos ciudades con sus respectivos costos."""
         if from_id not in self.cities or to_id not in self.cities:
             return False
@@ -110,6 +120,8 @@ class Graph:
             "time_hours": float(time_hours),
             "toll_cost_cop": float(toll_cost_cop),
             "fuel_cost_cop": float(fuel_cost_cop)
+            ,"active": bool(active), "category": category, "validated": bool(validated),
+            "source": source, "researcher": researcher
         }
         self.adj[from_id][to_id] = edge_data
 
@@ -124,6 +136,8 @@ class Graph:
                 "time_hours": float(time_hours),
                 "toll_cost_cop": float(toll_cost_cop),
                 "fuel_cost_cop": float(rev_fuel)
+                ,"active": bool(active), "category": category, "validated": bool(validated),
+                "source": source, "researcher": researcher
             }
             self.adj[to_id][from_id] = rev_edge
 
@@ -146,6 +160,22 @@ class Graph:
             self.cities[city_id]["active"] = False
             return True
         return False
+
+    def set_edge_active(self, from_id: str, to_id: str, active: bool) -> bool:
+        """Activa o desactiva una arista sin eliminarla."""
+        edge = self.adj.get(from_id, {}).get(to_id)
+        if edge is None:
+            return False
+        edge["active"] = bool(active)
+        return True
+
+    def modify_city(self, city_id: str, **kwargs) -> bool:
+        """Modifica atributos permitidos de una ciudad."""
+        city = self.cities.get(city_id)
+        if city is None or any(key not in city for key in kwargs):
+            return False
+        city.update(kwargs)
+        return True
 
     def activate_city(self, city_id: str) -> bool:
         """Activa una ciudad previamente desactivada."""
@@ -263,6 +293,8 @@ class Graph:
                 }
 
             for nxt, edge in self.adj.get(curr, {}).items():
+                if not edge.get("active", True):
+                    continue
                 if not self.cities.get(nxt, {}).get("active", True):
                     continue
 
@@ -362,6 +394,8 @@ class Graph:
                 }
 
             for nxt, edge in self.adj.get(curr, {}).items():
+                if not edge.get("active", True):
+                    continue
                 if not self.cities.get(nxt, {}).get("active", True):
                     continue
 
@@ -400,6 +434,7 @@ def save_graph(graph: Graph, filepath: str) -> bool:
                 "name": city["name"],
                 "lat": city["lat"],
                 "lon": city["lon"],
+                "department": city.get("department", "N/A"),
                 "fuel_price_cop": city["fuel_price_cop"],
                 "active": city.get("active", True)
             })
@@ -413,6 +448,9 @@ def save_graph(graph: Graph, filepath: str) -> bool:
                 "time_hours": edge["time_hours"],
                 "toll_cost_cop": edge["toll_cost_cop"],
                 "fuel_cost_cop": edge["fuel_cost_cop"]
+                ,"active": edge.get("active", True), "category": edge.get("category", "Primaria"),
+                "validated": edge.get("validated", True), "source": edge.get("source", "Google Maps"),
+                "researcher": edge.get("researcher", "Grupo UPC")
             })
 
         payload = {

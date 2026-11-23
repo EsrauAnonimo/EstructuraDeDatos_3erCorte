@@ -27,12 +27,11 @@ def main():
 
     graph = Graph(directed=True)
     if not graph.load_from_json(data_path):
-        QMessageBox.critical(
+        QMessageBox.warning(
             None,
-            "Error de carga",
-            f"No se pudo cargar el archivo de datos del grafo en:\n{data_path}"
+            "Persistencia no encontrada",
+            "No se encontró graph_data.json. Iniciando con grafo vacío. Puedes agregar datos en la pestaña Gestión."
         )
-        sys.exit(1)
 
     window = MainWindow(graph=graph, data_filepath=data_path)
     window.show()
