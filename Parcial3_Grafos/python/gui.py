@@ -124,6 +124,8 @@ class CityDialog(QDialog):
 
         self.txt_name = QLineEdit()
         self.txt_name.setPlaceholderText("Ej. Bogotá")
+        self.txt_department = QLineEdit()
+        self.txt_department.setPlaceholderText("Ej. Cundinamarca")
 
         self.spn_lat = QDoubleSpinBox()
         self.spn_lat.setRange(-90.0, 90.0)
@@ -148,6 +150,7 @@ class CityDialog(QDialog):
             self.txt_id.setText(city_data.get("id", ""))
             self.txt_id.setEnabled(False)  # El ID es inmutable en edición
             self.txt_name.setText(city_data.get("name", ""))
+            self.txt_department.setText(city_data.get("department", "N/A"))
             self.spn_lat.setValue(city_data.get("lat", 0.0))
             self.spn_lon.setValue(city_data.get("lon", 0.0))
             self.spn_fuel.setValue(city_data.get("fuel_price_cop", 16000.0))
@@ -155,6 +158,7 @@ class CityDialog(QDialog):
 
         form.addRow("Identificador (ID):", self.txt_id)
         form.addRow("Nombre de Ciudad:", self.txt_name)
+        form.addRow("Departamento:", self.txt_department)
         form.addRow("Latitud:", self.spn_lat)
         form.addRow("Longitud:", self.spn_lon)
         form.addRow("Precio Combustible (COP):", self.spn_fuel)
@@ -182,6 +186,7 @@ class CityDialog(QDialog):
         return {
             "id": self.txt_id.text().strip().upper(),
             "name": self.txt_name.text().strip(),
+            "department": self.txt_department.text().strip() or "N/A",
             "lat": self.spn_lat.value(),
             "lon": self.spn_lon.value(),
             "fuel_price_cop": self.spn_fuel.value(),
@@ -229,6 +234,11 @@ class EdgeDialog(QDialog):
         self.spn_toll.setValue(0.0)
         self.spn_toll.setPrefix("$ ")
 
+        self.txt_category = QLineEdit("Primaria")
+        self.chk_validated = QCheckBox("Ruta validada")
+        self.chk_validated.setChecked(True)
+        self.txt_source = QLineEdit("Google Maps")
+
         self.chk_bidirectional = QCheckBox("Crear también sentido inverso")
         self.chk_bidirectional.setChecked(True)
 
@@ -245,6 +255,9 @@ class EdgeDialog(QDialog):
             self.spn_dist.setValue(edge_data.get("distance_km", 100.0))
             self.spn_time.setValue(edge_data.get("time_hours", 2.0))
             self.spn_toll.setValue(edge_data.get("toll_cost_cop", 0.0))
+            self.txt_category.setText(edge_data.get("category", "Primaria"))
+            self.chk_validated.setChecked(edge_data.get("validated", True))
+            self.txt_source.setText(edge_data.get("source", "Google Maps"))
             self.chk_bidirectional.setText("Aplicar cambios también al sentido inverso")
 
         form.addRow("Ciudad Origen:", self.combo_from)
@@ -252,6 +265,9 @@ class EdgeDialog(QDialog):
         form.addRow("Distancia:", self.spn_dist)
         form.addRow("Tiempo estimado:", self.spn_time)
         form.addRow("Costo de Peajes (COP):", self.spn_toll)
+        form.addRow("Categoría:", self.txt_category)
+        form.addRow("Validación:", self.chk_validated)
+        form.addRow("Fuente:", self.txt_source)
         form.addRow("Bidireccional:", self.chk_bidirectional)
         layout.addLayout(form)
 
@@ -276,6 +292,9 @@ class EdgeDialog(QDialog):
             "distance_km": self.spn_dist.value(),
             "time_hours": self.spn_time.value(),
             "toll_cost_cop": self.spn_toll.value(),
+            "category": self.txt_category.text().strip() or "Primaria",
+            "validated": self.chk_validated.isChecked(),
+            "source": self.txt_source.text().strip() or "Google Maps",
             "bidirectional": self.chk_bidirectional.isChecked()
         }
 
@@ -361,6 +380,7 @@ class MainWindow(QMainWindow):
         name_col.addStretch()
         name_col.addWidget(name)
         name_col.addWidget(tagline)
+        name_col.addWidget(QLabel("Universidad Popular del Cesar — Ingeniería de Sistemas"))
         name_col.addStretch()
         layout.addWidget(logo)
         layout.addSpacing(4)
@@ -641,7 +661,7 @@ class MainWindow(QMainWindow):
 
         # --- Ciudades
         self.tbl_cities = self._make_table(
-            ["ID", "Nombre", "Latitud", "Longitud", "Gasolina", "Estado"])
+            ["ID", "Nombre", "Departamento", "Latitud", "Longitud", "Gasolina", "Estado"])
         self.tbl_cities.doubleClicked.connect(self._handle_modify_city)
         self.tbl_cities.itemSelectionChanged.connect(self._update_management_buttons)
 
@@ -662,7 +682,7 @@ class MainWindow(QMainWindow):
 
         # --- Conexiones
         self.tbl_edges = self._make_table(
-            ["Desde", "Hasta", "Distancia", "Tiempo", "Peaje", "Combustible"])
+            ["Desde", "Hasta", "Distancia", "Tiempo", "Peaje", "Combustible", "Categoría", "Activa", "Validada", "Fuente"])
         self.tbl_edges.doubleClicked.connect(self._handle_modify_edge)
         self.tbl_edges.itemSelectionChanged.connect(self._update_management_buttons)
 
@@ -670,6 +690,8 @@ class MainWindow(QMainWindow):
         self.btn_add_edge.clicked.connect(self._handle_add_edge)
         self.btn_mod_edge = _button("Editar", "pencil")
         self.btn_mod_edge.clicked.connect(self._handle_modify_edge)
+        self.btn_toggle_edge = _button("Desactivar", "power")
+        self.btn_toggle_edge.clicked.connect(self._handle_toggle_edge)
         self.btn_del_edge = _button("Eliminar", "trash", "dangerButton", styles.DANGER_DARK)
         self.btn_del_edge.clicked.connect(self._handle_delete_edge)
         self.txt_search_edges = self._make_search("Buscar por ciudad, p. ej. BOG...")
@@ -677,7 +699,7 @@ class MainWindow(QMainWindow):
 
         edges_card, self.lbl_edges_count = self._table_card(
             "Conexiones viales", self.txt_search_edges, self.tbl_edges,
-            [self.btn_add_edge, self.btn_mod_edge], [self.btn_del_edge])
+            [self.btn_add_edge, self.btn_mod_edge, self.btn_toggle_edge], [self.btn_del_edge])
 
         cards = QHBoxLayout()
         cards.setSpacing(16)
@@ -775,14 +797,15 @@ class MainWindow(QMainWindow):
             is_active = c.get("active", True)
             self.tbl_cities.setItem(row, 0, self._cell(c["id"], bold=True))
             self.tbl_cities.setItem(row, 1, self._cell(c["name"]))
-            self.tbl_cities.setItem(row, 2, self._cell(f"{c['lat']:.4f}"))
-            self.tbl_cities.setItem(row, 3, self._cell(f"{c['lon']:.4f}"))
-            self.tbl_cities.setItem(row, 4, self._cell(format_cop(c["fuel_price_cop"])))
+            self.tbl_cities.setItem(row, 2, self._cell(c.get("department", "N/A")))
+            self.tbl_cities.setItem(row, 3, self._cell(f"{c['lat']:.4f}"))
+            self.tbl_cities.setItem(row, 4, self._cell(f"{c['lon']:.4f}"))
+            self.tbl_cities.setItem(row, 5, self._cell(format_cop(c["fuel_price_cop"])))
             # El estado se guarda como dato para que la búsqueda también lo encuentre
             status_item = QTableWidgetItem()
             status_item.setData(Qt.ItemDataRole.UserRole, "Activa" if is_active else "Inactiva")
-            self.tbl_cities.setItem(row, 5, status_item)
-            self.tbl_cities.setCellWidget(row, 5, status_pill(is_active))
+            self.tbl_cities.setItem(row, 6, status_item)
+            self.tbl_cities.setCellWidget(row, 6, status_pill(is_active))
 
         edges = sorted(self.graph.get_edges(), key=lambda e: (e["from"], e["to"]))
         self.tbl_edges.setRowCount(len(edges))
@@ -793,6 +816,10 @@ class MainWindow(QMainWindow):
             self.tbl_edges.setItem(row, 3, self._cell(format_hours(e["time_hours"])))
             self.tbl_edges.setItem(row, 4, self._cell(format_cop(e["toll_cost_cop"])))
             self.tbl_edges.setItem(row, 5, self._cell(format_cop(e["fuel_cost_cop"])))
+            self.tbl_edges.setItem(row, 6, self._cell(e.get("category", "Primaria")))
+            self.tbl_edges.setItem(row, 7, self._cell("Sí" if e.get("active", True) else "No"))
+            self.tbl_edges.setItem(row, 8, self._cell("Sí" if e.get("validated", True) else "No"))
+            self.tbl_edges.setItem(row, 9, self._cell(e.get("source", "Google Maps")))
 
         self.lbl_cities_count.setText(str(len(cities)))
         self.lbl_edges_count.setText(str(len(edges)))
@@ -831,8 +858,16 @@ class MainWindow(QMainWindow):
             self.btn_toggle_city.setText("Desactivar")
 
         has_edge = bool(self.tbl_edges.selectedItems())
-        for btn in (self.btn_mod_edge, self.btn_del_edge):
+        for btn in (self.btn_mod_edge, self.btn_toggle_edge, self.btn_del_edge):
             btn.setEnabled(has_edge)
+        if has_edge:
+            row = self.tbl_edges.currentRow()
+            u = self.tbl_edges.item(row, 0).text()
+            v = self.tbl_edges.item(row, 1).text()
+            active = self.graph.adj.get(u, {}).get(v, {}).get("active", True)
+            self.btn_toggle_edge.setText("Desactivar" if active else "Activar")
+        else:
+            self.btn_toggle_edge.setText("Desactivar")
 
     def _sync_and_save(self, operation_msg: str):
         """Guarda persistencia en JSON, refresca interfaces y verifica conectividad."""
@@ -872,7 +907,7 @@ class MainWindow(QMainWindow):
                 lat=data["lat"],
                 lon=data["lon"],
                 fuel_price_cop=data["fuel_price_cop"],
-                active=data["active"]
+                active=data["active"], department=data["department"]
             )
             self._sync_and_save(f"Ciudad {data['id']} agregada.")
 
@@ -896,7 +931,7 @@ class MainWindow(QMainWindow):
                 lat=data["lat"],
                 lon=data["lon"],
                 fuel_price_cop=data["fuel_price_cop"],
-                active=data["active"]
+                active=data["active"], department=data["department"]
             )
             self._sync_and_save(f"Ciudad {cid} actualizada.")
 
@@ -943,9 +978,9 @@ class MainWindow(QMainWindow):
             u, v = data["from"], data["to"]
             dist, t_h, toll = data["distance_km"], data["time_hours"], data["toll_cost_cop"]
 
-            self.graph.add_edge(u, v, dist, t_h, toll)
+            self.graph.add_edge(u, v, dist, t_h, toll, category=data["category"], validated=data["validated"], source=data["source"])
             if data["bidirectional"]:
-                self.graph.add_edge(v, u, dist, t_h, toll)
+                self.graph.add_edge(v, u, dist, t_h, toll, category=data["category"], validated=data["validated"], source=data["source"])
 
             self._sync_and_save(f"Arista {u} -> {v} agregada.")
 
@@ -967,7 +1002,8 @@ class MainWindow(QMainWindow):
             dist, t_h, toll = data["distance_km"], data["time_hours"], data["toll_cost_cop"]
             fuel = round((dist / 35.0) * self.graph.cities[u]["fuel_price_cop"], 2)
 
-            self.graph.modify_edge(u, v, distance_km=dist, time_hours=t_h, toll_cost_cop=toll, fuel_cost_cop=fuel)
+            self.graph.modify_edge(u, v, distance_km=dist, time_hours=t_h, toll_cost_cop=toll, fuel_cost_cop=fuel,
+                                   category=data["category"], validated=data["validated"], source=data["source"])
             if data["bidirectional"] and v in self.graph.adj and u in self.graph.adj[v]:
                 fuel_rev = round((dist / 35.0) * self.graph.cities[v]["fuel_price_cop"], 2)
                 self.graph.modify_edge(v, u, distance_km=dist, time_hours=t_h, toll_cost_cop=toll, fuel_cost_cop=fuel_rev)
@@ -1002,6 +1038,18 @@ class MainWindow(QMainWindow):
                     self.graph.remove_edge(v, u)
 
             self._sync_and_save(f"Arista {u} -> {v} eliminada.")
+
+    def _handle_toggle_edge(self):
+        """Cambia el flag activo de la arista seleccionada sin borrarla."""
+        selected = self.tbl_edges.currentRow()
+        if selected < 0:
+            QMessageBox.information(self, "Seleccionar", "Seleccione una arista para activar o desactivar.")
+            return
+        u = self.tbl_edges.item(selected, 0).text()
+        v = self.tbl_edges.item(selected, 1).text()
+        current = self.graph.adj.get(u, {}).get(v, {}).get("active", True)
+        self.graph.set_edge_active(u, v, not current)
+        self._sync_and_save(f"Arista {u} -> {v} {'activada' if not current else 'desactivada'}.")
 
     # --------------------------------------------------------------------------
     # MÉTODOS DE SOPORTE Y ACCIONES DE RUTAS

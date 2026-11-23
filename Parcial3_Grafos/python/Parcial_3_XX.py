@@ -6,8 +6,10 @@ Description: Main entry point for the PERA PyQt6 application.
 import os
 import sys
 
+# Compatibilidad OpenGL en Windows para evitar que Chromium deje el mapa en blanco.
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu --no-sandbox --disable-software-rasterizer"
+
 # IMPORTANTE: QtWebEngineWidgets debe importarse antes de instanciar QApplication
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -27,12 +29,11 @@ def main():
 
     graph = Graph(directed=True)
     if not graph.load_from_json(data_path):
-        QMessageBox.critical(
+        QMessageBox.warning(
             None,
-            "Error de carga",
-            f"No se pudo cargar el archivo de datos del grafo en:\n{data_path}"
+            "Persistencia no encontrada",
+            "No se encontró graph_data.json. Iniciando con grafo vacío. Puedes agregar datos en la pestaña Gestión."
         )
-        sys.exit(1)
 
     window = MainWindow(graph=graph, data_filepath=data_path)
     window.show()
